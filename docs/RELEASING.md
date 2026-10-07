@@ -14,6 +14,8 @@ git push origin main --tags
 
 The release matrix builds Windows x64, macOS arm64 and macOS x64 on their own OS runners. Only when every matrix build passes does the publish job create a GitHub prerelease. Packages have versions and architectures in filenames. SHA256 manifests accompany them.
 
+After building, each release job runs `scripts/smoke-package.cjs` against its actual packaged executable. A version-matched result must be written within 45 seconds; startup failures and missing runtime modules prevent publication. Source smoke alone is insufficient: installed alpha.6 validation found a missing shared city-list module, now included in alpha.7. Verify the published Windows installer SHA256 and preserved profile before declaring the installed release complete.
+
 Each architecture uploads a separate artifact folder. The publish job merges matching macOS channel manifests into one file with both architectures, so the updater can choose the correct ZIP without overwriting metadata. It checks matching versions and the presence of both architectures before publishing. Unsigned macOS update installation is not supported in the alpha; use release packages.
 
 Windows signing and macOS signing/notarization require owner-supplied credentials stored in GitHub Actions secrets, never in the repo. Current alpha CI intentionally creates unsigned artifacts. Stable releases must add signing, notarization and a signed upgrade test before claiming trusted automatic installation. Release checksums provide integrity checking, not publisher identity.
