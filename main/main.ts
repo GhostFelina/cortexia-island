@@ -132,6 +132,10 @@ if (!lock) {
   }
   async function createWindow() {
     store = new DataStore(app.getPath('userData'));
+    if (process.argv.includes('--dock')) {
+      store.data.settings.position = null;
+      store.data.settings.topOffset = 0;
+    }
     if (smoke)
       store.data = {
         schemaVersion: 1,
@@ -534,6 +538,17 @@ if (!lock) {
           if (rows !== 2) throw new Error('Energy history failed');
           const errors = await win.webContents.executeJavaScript(`window.__islandErrors || []`);
           if (errors.length) throw new Error(JSON.stringify(errors));
+          if (process.argv.includes('--verify-updates')) {
+            if (!app.isPackaged)
+              throw new Error('Update feed verification requires a packaged application');
+            await autoUpdater.checkForUpdates();
+            if (update.phase !== 'current')
+              throw new Error('Expected current released version: ' + JSON.stringify(update));
+            fs.writeFileSync(
+              path.join(artifact, 'update-check.json'),
+              JSON.stringify({ version: app.getVersion(), ...update }, null, 2),
+            );
+          }
           fs.writeFileSync(
             path.join(artifact, 'smoke-result.json'),
             JSON.stringify(
