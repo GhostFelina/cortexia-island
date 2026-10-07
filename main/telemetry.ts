@@ -1,7 +1,18 @@
 import os from 'node:os';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import { createHash } from 'node:crypto';
+import { UsageProvider } from './usage';
 import si from 'systeminformation';
-import { emptyDay, estimateWatts, integrateEnergy, localDate, parseElectricalStatus } from './core';
+import {
+  emptyDay,
+  estimateWatts,
+  integrateEnergy,
+  integrateBoot,
+  trackBoot,
+  localDate,
+  parseElectricalStatus,
+} from './core';
 import type { DataStore } from './store';
 import type { Snapshot, NetworkSample, PowerSample } from '../shared/types';
 function cpuTimes() {
@@ -46,6 +57,7 @@ function probe(host: string): Promise<number | null> {
   });
 }
 export class Telemetry {
+  private usage: UsageProvider;
   last: Snapshot | null = null;
   private timer: NodeJS.Timeout | null = null;
   private busy = false;
@@ -61,20 +73,83 @@ export class Telemetry {
   private battery: Snapshot['battery'] = { hasBattery: false, percent: null, charging: false };
   private lastBattery = 0;
   private lastPersist = 0;
+  private sessionId: string | undefined;
   constructor(
     private store: DataStore,
     private publish: (sample: Snapshot) => void,
-  ) {}
+    usageDirectory: string,
+  ) {
+    fs.mkdirSync(usageDirectory, { recursive: true, mode: 0o700 });
+    this.usage = new UsageProvider(usageDirectory, () => {
+      if (this.last) {
+        this.last = { ...this.last, usage: this.usage.snapshot() };
+        this.publish(this.last);
+      }
+    });
+    if (process.platform === 'win32')
+      try {
+        this.sessionId = createHash('sha256')
+          .update(execFileSync('whoami.exe', ['/logonid'], { windowsHide: true, timeout: 2000 }))
+          .digest('hex');
+      } catch {}
+    this.store.data.boot = trackBoot(this.store.data.boot, Date.now(), os.uptime(), this.sessionId);
+  }
+  refreshUsage(force = false) {
+    const s = this.store.data.settings;
+    const barActive = s.taskbar.enabled && ['taskbar', 'both'].includes(s.presentation);
+    const barQuota = barActive && s.taskbar.rotate;
+    const codex =
+      s.widgets.includes('codex') ||
+      barQuota ||
+      (barActive && s.taskbar.metrics.some((m) => m.startsWith('codex')));
+    const claude =
+      s.widgets.includes('claude') ||
+      barQuota ||
+      (barActive && s.taskbar.metrics.some((m) => m.startsWith('claude')));
+    this.usage.tick(codex, claude, force);
+  }
+  flush() {
+    if (
+      this.previousTime !== null &&
+      this.last?.power.available &&
+      this.last.power.watts !== null
+    ) {
+      const now = Date.now(),
+        s = this.store.data.settings,
+        p = this.last.power;
+      integrateEnergy(
+        this.store.data.days,
+        this.previousTime,
+        now,
+        p.watts!,
+        p.source === 'meter',
+        s.tariff,
+      );
+      if (this.store.data.boot)
+        integrateBoot(
+          this.store.data.boot,
+          this.previousTime,
+          now,
+          p.watts!,
+          p.source === 'meter',
+          s.tariff,
+        );
+      this.previousTime = null;
+    }
+  }
   start() {
+    this.refreshUsage(true);
     void this.tick();
     this.timer = setInterval(() => void this.tick(), 2000);
   }
   stop() {
+    this.usage.stop();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.previousTime = null;
   }
   resetInterval() {
+    this.store.data.boot = trackBoot(this.store.data.boot, Date.now(), os.uptime(), this.sessionId);
     this.previousTime = null;
     this.lastProbe = 0;
     this.lastInterfaces = 0;
@@ -182,7 +257,7 @@ export class Telemetry {
         this.previousTime !== null &&
         power.watts !== null &&
         this.previousSource === power.source
-      )
+      ) {
         integrateEnergy(
           this.store.data.days,
           this.previousTime,
@@ -191,6 +266,17 @@ export class Telemetry {
           power.source === 'meter',
           settings.tariff,
         );
+        if (this.store.data.boot)
+          integrateBoot(
+            this.store.data.boot,
+            this.previousTime,
+            sampleTime,
+            power.watts,
+            power.source === 'meter',
+            settings.tariff,
+          );
+      }
+      this.refreshUsage();
       this.previousTime = power.watts !== null ? sampleTime : null;
       this.previousSource = power.source;
       const today =
@@ -200,6 +286,8 @@ export class Telemetry {
       if (!power.available) errors.push('meter-unavailable');
       if (!net || net.rx_sec < 0) errors.push('network-unavailable');
       this.last = {
+        boot: this.store.data.boot ? { ...this.store.data.boot } : undefined,
+        usage: this.usage.snapshot(),
         time: sampleTime,
         cpu,
         memoryPercent: 100 * (1 - os.freemem() / os.totalmem()),

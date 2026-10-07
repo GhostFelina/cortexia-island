@@ -16,9 +16,181 @@ import {
   emptyDay,
   locateDisplay,
   parseElectricalStatus,
+  trackBoot,
+  integrateBoot,
 } from '../main/core';
 import { DataStore } from '../main/store';
 import type { DayEnergy } from '../shared/types';
+import { parseCodexUsage, parseClaudeUsage } from '../main/usage';
+import { installClaudeBridge, removeClaudeBridge } from '../main/claude-bridge';
+import { barMetrics } from '../shared/bar';
+
+test('bar rotation uses ten-second groups, wraps and retains fixed choices', () => {
+  const s = { ...DEFAULT_SETTINGS.taskbar, rotate: true };
+  assert.deepEqual(barMetrics(s, 0), ['sessionCost', 'sessionEnergy']);
+  assert.deepEqual(barMetrics(s, 9999), ['sessionCost', 'sessionEnergy']);
+  assert.deepEqual(barMetrics(s, 10000), ['codex5h', 'codexWeek']);
+  assert.deepEqual(barMetrics(s, 20000), ['claude5h', 'claudeWeek']);
+  assert.deepEqual(barMetrics(s, 30000), ['sessionCost', 'sessionEnergy']);
+  assert.deepEqual(barMetrics({ ...s, rotate: false }, 20000), s.metrics);
+  assert.throws(() => validateSettings({ ...DEFAULT_SETTINGS, taskbar: { ...s, rotate: 'yes' } }));
+  const previous: any = { ...s };
+  delete previous.rotate;
+  assert.equal(validateSettings({ ...DEFAULT_SETTINGS, taskbar: previous }).taskbar.rotate, true);
+});
+test('PC session energy survives app restarts, resets on new login, and never fills sleep gaps', () => {
+  const now = Date.now(),
+    id = 'a'.repeat(64);
+  const boot = trackBoot(undefined, now, 100, id);
+  integrateBoot(boot, now, now + 10000, 100, true, 3);
+  assert.ok(Math.abs(boot.measuredWh - 100 / 360) < 1e-8);
+  assert.equal(boot.trackedSeconds, 10);
+  assert.ok(Math.abs(boot.cost - (100 / 360000) * 3) < 1e-8);
+  assert.equal(trackBoot(boot, now + 20000, 120, id), boot);
+  const saved = boot.measuredWh;
+  integrateBoot(boot, now + 10000, now + 20001, 100, true, 3);
+  assert.equal(boot.measuredWh, saved);
+  assert.equal(trackBoot(boot, now + 20000, 120, 'b'.repeat(64)).measuredWh, 0);
+  assert.equal(trackBoot(boot, now + 200000, 1, id).measuredWh, 0);
+  const store = validateStore({ schemaVersion: 1, settings: DEFAULT_SETTINGS, days: [], boot });
+  assert.deepEqual(store.boot, boot);
+  assert.throws(() => validateStore({ ...store, boot: { ...boot, sessionId: 'invalid' } }));
+});
+test('real usage windows validate percentages, durations, expiry and freshness', () => {
+  const now = Date.now(),
+    reset = (now + 3600000) / 1000;
+  const codex = parseCodexUsage(
+    {
+      rateLimitsByLimitId: {
+        codex: {
+          primary: { usedPercent: 34, windowDurationMins: 300, resetsAt: reset },
+          secondary: { usedPercent: 36, windowDurationMins: 10080, resetsAt: reset },
+        },
+      },
+    },
+    now,
+  );
+  assert.equal(codex.fiveHour?.usedPercent, 34);
+  assert.equal(codex.weekly?.usedPercent, 36);
+  assert.equal(
+    parseCodexUsage(
+      { rateLimits: { primary: { usedPercent: 34, windowDurationMins: 15, resetsAt: reset } } },
+      now,
+    ).fiveHour,
+    null,
+  );
+  const data = {
+    receivedAt: now,
+    rate_limits: {
+      five_hour: { used_percentage: 23.5, resets_at: reset },
+      seven_day: { used_percentage: 41.2, resets_at: reset },
+    },
+  };
+  assert.equal(parseClaudeUsage(data, now).status, 'ready');
+  assert.equal(parseClaudeUsage(data, now + 121000).status, 'stale');
+  assert.equal(parseClaudeUsage(data, now + 3600001).fiveHour, null);
+  assert.equal(
+    parseClaudeUsage(
+      { ...data, rate_limits: { five_hour: { used_percentage: Infinity, resets_at: reset } } },
+      now,
+    ).fiveHour,
+    null,
+  );
+  assert.equal(parseClaudeUsage({}, now).status, 'unavailable');
+});
+test('Claude bridge preserves settings, sanitizes input and restores the original status line', () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'cortexia-bridge-'));
+  try {
+    const home = path.join(temporary, 'home'),
+      directory = path.join(temporary, 'integrations');
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    const settingsFile = path.join(home, '.claude', 'settings.json');
+    const original = {
+      theme: 'dark',
+      statusLine: { type: 'command', command: 'echo prior', padding: 2 },
+      env: { TEST_ONLY: 'sentinel' },
+    };
+    fs.writeFileSync(settingsFile, JSON.stringify(original));
+    assert.ok(
+      installClaudeBridge(
+        directory,
+        path.resolve('assets/integrations/claude-statusline.cjs'),
+        process.execPath,
+        home,
+      ),
+    );
+    const configured = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    assert.deepEqual(configured.env, original.env);
+    assert.equal(configured.theme, 'dark');
+    assert.equal(configured.statusLine.refreshInterval, 15);
+    const reset = Date.now() / 1000 + 3600,
+      destination = path.join(directory, 'claude-limits.json');
+    const output = execFileSync(
+      process.execPath,
+      [path.join(directory, 'claude-statusline.cjs'), destination],
+      {
+        input: JSON.stringify({
+          rate_limits: { five_hour: { used_percentage: 20, resets_at: reset } },
+          session_id: 'private-session',
+          api_key: 'do-not-copy',
+        }),
+        encoding: 'utf8',
+      },
+    );
+    assert.ok(output.includes('prior'));
+    const cache = JSON.parse(fs.readFileSync(destination, 'utf8'));
+    assert.deepEqual(Object.keys(cache).sort(), ['rate_limits', 'receivedAt']);
+    assert.equal(cache.rate_limits.five_hour.used_percentage, 20);
+    assert.ok(!JSON.stringify(cache).includes('private-session'));
+    assert.ok(!JSON.stringify(cache).includes('do-not-copy'));
+    if (process.platform === 'win32') {
+      const encoded = configured.statusLine.command.split(' -EncodedCommand ')[1];
+      assert.ok(encoded);
+      const wrapperOutput = execFileSync(
+        'powershell.exe',
+        ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+        {
+          input: JSON.stringify({
+            rate_limits: { five_hour: { used_percentage: 21, resets_at: reset } },
+          }),
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 10000,
+        },
+      );
+      assert.ok(wrapperOutput.includes('prior'));
+      assert.equal(
+        JSON.parse(fs.readFileSync(destination, 'utf8')).rate_limits.five_hour.used_percentage,
+        21,
+      );
+    }
+    assert.ok(
+      installClaudeBridge(
+        directory,
+        path.resolve('assets/integrations/claude-statusline.cjs'),
+        process.execPath,
+        home,
+      ),
+    );
+    assert.ok(removeClaudeBridge(directory, home));
+    assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile, 'utf8')), original);
+    assert.ok(
+      installClaudeBridge(
+        directory,
+        path.resolve('assets/integrations/claude-statusline.cjs'),
+        process.execPath,
+        home,
+      ),
+    );
+    const modified = { ...original, statusLine: { type: 'command', command: 'echo changed' } };
+    fs.writeFileSync(settingsFile, JSON.stringify(modified));
+    assert.equal(removeClaudeBridge(directory, home), false);
+    assert.deepEqual(JSON.parse(fs.readFileSync(settingsFile, 'utf8')), modified);
+  } finally {
+    assert.ok(path.resolve(temporary).startsWith(path.resolve(os.tmpdir()) + path.sep));
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
 test('packaging includes shared runtime modules used by the tariff provider', () => {
   const manifest = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
   assert.ok(manifest.build.files.includes('out/shared/**/*'));

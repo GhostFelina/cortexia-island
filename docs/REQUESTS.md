@@ -34,6 +34,11 @@ Follow-up implemented in alpha.3: thinner compact notch, concave shoulder transi
 6. Ask the user in the app how to use Cortexia: Windows bar only, dynamic island, or normal application window. Persist and expose the mode in Settings. Bar-only hides the other surfaces and keeps a clear route to settings; improve coherent visibility/startup/recovery transitions. Implement after the current release/install.
 7. Track used electricity per PC boot session as well as today: measured/estimated kWh, estimated cost and tracked coverage from automatic login startup until exit/shutdown. Do not invent consumption before login, during sleep or while no readings exist. Add right-click application menus on island/bar/app, and organize Settings into professional easy sections. Preserve GitHub versioned tested packages and backup/update compatibility.
 
+## Alpha.8 implementation of requests 4–7 and latest follow-up
+
+Implemented: actual Codex 5-hour/weekly provider, reversible documented Claude Code status-line bridge, clear unavailable/stale/source states; minimalist electricity glint; first-run island/bar/app/both choice and five Settings sections; PC-session kWh/cost with restart continuation and tracked coverage; native app context menus and close-to-background. Windows bar rotates every ten seconds through electricity cost/kWh, Codex 5-hour/week and Claude 5-hour/week, pauses on hover, resumes on leave and can return to fixed metrics. This rotation is separate from backend refresh cadence. Claude web-only independent polling is not supported; web use appears only when Claude Code reports it. Keep MacBook/notebook/hardware meter/signing tasks pending.
+
 ## External work before stable
 
 Obtain signing/notarization credentials, exercise signed upgrades and validate an actual power meter. The first alpha remains unsigned and labels modeled power as an estimate. The browser's image tool did not expose a verifiable model version; see BRAND.md for provenance.
+Latest follow-up: also show the tiny electricity animation specifically between the taskbar cost and tracked-kWh readings. Alpha.8 adds it with stable DOM updates (live readings do not restart the animation) and reduced-motion handling.

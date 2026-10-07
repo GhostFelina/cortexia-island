@@ -9,10 +9,15 @@
 - [x] Live network counters, probe latency and quality
 - [x] Explicit power estimate + Shelly outlet provider
 - [x] Energy history, prospective tariff and CSV
-- [x] Eight selectable/reorderable widgets
+- [x] Ten selectable/reorderable widgets
 - [x] Local backups, restore validation and recovery
 - [x] Versioned Windows/macOS packaging and release automation
 - [x] User requested update check/download/install flow
+
+- [x] PC-session used electricity/cost and background tracking
+- [x] Presentation mode selection, native app window, right-click menus and organized Settings
+- [x] Official Codex usage and reversible Claude Code status-line connection
+- [x] Ten-second electricity/Codex/Claude bar cycle with Windows hover pause/resume
 
 ## Before stable
 

@@ -7,7 +7,7 @@
 
 <p align="center"><img src="docs/images/showcase.png" width="560" alt="Cortexia Island expanded view with labeled demo readings"></p>
 <p align="center"><sub>Demo readings shown above. Your installation uses live local data.</sub></p>
-<p align="center"><img src="docs/images/compact.png" width="440" alt="Thin compact notch with daily estimated cost, tracked kWh and power demo readings"></p>
+<p align="center"><img src="docs/images/compact.png" width="440" alt="Thin compact notch with PC-session estimated cost, tracked kWh and power demo readings"></p>
 
 Cortexia Island is a compact, frameless desktop overlay with subtle grain, restrained light reflections and true black surfaces. Collapse it to a pill, expand it for detail, or select and reorder widgets in Settings. It is an independent design; it is not affiliated with Apple.
 
@@ -15,13 +15,16 @@ Cortexia Island is a compact, frameless desktop overlay with subtle grain, restr
 
 ## What works today
 
-- **Cost first:** today's estimated electricity cost leads both compact and expanded views, alongside tracked kWh, instantaneous watts and an hourly estimate at the current power. An explicit tariff setup action appears when no price is configured.
-- **Online tariff setup:** first launch asks only for a Turkish city and district. The standard national residential lower-tier tariff are retrieved directly from EPDK, validated and applied with tax-inclusive price, effective date and check date. Location stays local. It is a standard-tariff estimate: location cannot establish special contracts, SKTT, commercial rates or the household tier. See [tariff sources and scope](docs/TARIFFS.md).
+- **Cost first:** this PC session's estimated electricity cost leads both compact and expanded views, alongside tracked kWh, instantaneous watts and an hourly estimate at the current power. An explicit tariff setup action appears when no price is configured.
+- **Online tariff setup:** first launch asks only for a Turkish city and district. The standard national residential lower-tier tariff is retrieved directly from EPDK, validated and applied with tax-inclusive price, effective date and check date. Location stays local. It is a standard-tariff estimate: location cannot establish special contracts, SKTT, commercial rates or the household tier. See [tariff sources and scope](docs/TARIFFS.md).
 - **Network:** selected adapter throughput, ICMP target latency, jitter and lost replies over the last 20 probes. Readings every ~2 seconds, probes every ~6 seconds.
-- **Energy:** configurable idle/full load profile; optional Shelly Gen2/Gen3 outlet power readings; daily measured/estimated kWh and costs based on your tariff.
-- **Widgets:** network, power, energy, CPU/RAM, notebook battery, local clock, electrical health and energy insights. Select and reorder them from a list.
+- **Energy:** configurable idle/full load profile; optional Shelly Gen2/Gen3 outlet power readings; daily and current PC-session measured/estimated kWh and costs based on your tariff. Session totals survive app restart within the same login/boot; tracking starts when the app starts, never backfills pre-login time.
+- **Widgets:** network, power, energy, CPU/RAM, notebook battery, local clock, electrical health, energy insights, Codex and Claude usage. Select and reorder them from a list.
 - **Desktop:** thin compact notch, concave shoulders, optional edge attachment on every display, free cross-monitor drag-to-move, four-corner resizing with saved sizes per view, taskbar/Dock and tray icons, show/hide shortcut, opacity, click-through recovery, always on top, display selection, reduced motion and optional login startup.
-- **Taskbar indicator:** Windows has an independent live indicator in the lower-left taskbar area. Choose one or two metrics: cost, kWh, watts, download, upload or ping. Click it to open the island; disable it in Settings. It overlays this area, not the native weather widget. Auto-hiding or non-bottom taskbars are not supported.
+- **Taskbar indicator:** Windows has an independent live indicator in the lower-left taskbar area. Choose one or two metrics: daily/session cost and kWh, watts, download, upload, ping, Codex/Claude 5-hour or weekly usage. macOS uses the same selection beside its menu-bar icon. Click it to open the island; disable it in Settings. It overlays this area, not the native weather widget. Auto-hiding or non-bottom taskbars are not supported.
+- **Usage modes:** first setup asks whether to use an island, bar only, a normal application window or island + bar. Settings has General, Energy, Widgets, Network and Data/version sections. Right-click any surface for the app menu. Bar-only hides the island and opens temporary Settings when clicked. Closing the main window keeps tracking; use Exit to stop. Login startup is enabled on first migration and remains configurable.
+- **AI usage:** actual Codex 5-hour/weekly usage from the official read-only CLI app-server. Claude uses the official Claude Code status line, with reversible setup and preservation of an existing status line. Web/desktop usage is shown only when Claude Code reports it; a timer replays CLI data and is not independent backend polling. Missing or stale data is marked. See [setup, sources and limitations](docs/AI_USAGE.md).
+- **Bar cycle:** the default 10-second cycle displays PC cost/kWh → Codex 5-hour/week → Claude 5-hour/week. Hover the Windows indicator to pause; leave to resume. Disable the cycle in General settings for fixed chosen readings.
 - **Mac droplet:** compact mode defaults to a droplet on macOS. Click to open or pull down for a springy stretch and release to open. Drag the small grip to move it. Reduced motion is supported; real MacBook validation is pending.
 - **Electrical health:** compatible meters can report voltage, current, frequency, temperature, power factor and protection alerts. Missing fields stay blank. These are meter reports, not a grid/PSU safety diagnosis.
 - **Data:** local storage, atomic writes, 14 automatic backups, validated JSON restore, CSV export and recovery after a corrupt primary file.
@@ -38,7 +41,7 @@ Cortexia Island is a compact, frameless desktop overlay with subtle grain, restr
 
 ## Install
 
-Download the package for your architecture from [Releases](https://github.com/GhostFelina/cortexia-island/releases). Windows installs per user and retains your data on uninstall. Use the tray icon or **Ctrl/⌘ + Shift + I** to show or hide the island; **Esc** collapses it. The first setup asks only for city/district; no electricity unit price is needed. The gear opens optional widget, power and appearance settings.
+Download the package for your architecture from [Releases](https://github.com/GhostFelina/cortexia-island/releases). Windows installs per user and retains your data on uninstall. Use the tray icon or **Ctrl/⌘ + Shift + I** to show or hide the island; **Esc** collapses the island or minimizes the normal application. The first setup asks for a usage mode and city/district; no electricity unit price is needed. The gear opens optional widget, power and appearance settings.
 
 The first alpha packages are **unsigned**. macOS signing/notarization and Windows signing are planned before stable distribution. macOS in-app installation of updates requires signed releases; use the release packages while this is being established. macOS 13+ is required by [Electron 44](https://releases.electronjs.org/release/v44.0.0). Windows 11 x64 is the first locally exercised platform; macOS builds and smoke tests run on hosted macOS runners, with real MacBook validation still required.
 
@@ -61,13 +64,15 @@ npm run dist:mac  # macOS
 
 Dependencies and lockfiles are project local. Recreate `node_modules` on each machine. UI development listens only on `127.0.0.1:5371`; a browser alone does not have system telemetry access.
 
+<p align="center"><img src="docs/images/usage-demo.png" width="560" alt="Labeled AI usage demo; percentages are fixtures"></p>
+
 See [architecture](docs/ARCHITECTURE.md), [widget development](docs/WIDGETS.md), [release procedure](docs/RELEASING.md) and [cross-device setup](docs/CROSS_DEVICE.md).
 
 Read the [design audit](docs/DESIGN_AUDIT.md) for the electricity-first hierarchy and its validation scope.
 
 ## Privacy
 
-No analytics, accounts or cloud telemetry. Data remains in Electron’s per-user application directory. The routine external connection is the configured ICMP ping target. Online tariff requests contact EPDK without transmitting city, district or personal identifiers. Update checks contact GitHub only when requested; a selected meter is contacted on your local network. Exported backups include settings, location preferences and energy history: review them before sharing.
+No Cortexia account, analytics or cloud telemetry. Data remains in Electron’s per-user application directory. The routine external connection is the configured ICMP ping target. Online tariff requests contact EPDK without transmitting city, district or personal identifiers. Enabled Codex usage invokes the installed official Codex CLI using its own existing sign-in and contacts OpenAI for limits; Cortexia does not read or copy authentication files. Claude uses documented local status-line input, storing only percentages, reset times and report timestamp. No Claude OAuth tokens or browser sessions are collected. Update checks contact GitHub only when requested; a selected meter is contacted on your local network. Exported backups include settings, location preferences and energy history: review them before sharing.
 
 ## Help shape the island
 

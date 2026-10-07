@@ -1,4 +1,69 @@
-import type { Settings, WidgetId, DayEnergy, StoreData, PowerSample } from '../shared/types';
+import type {
+  Settings,
+  WidgetId,
+  DayEnergy,
+  StoreData,
+  PowerSample,
+  BootEnergy,
+  TaskbarMetric,
+} from '../shared/types';
+export const TASKBAR_METRICS: TaskbarMetric[] = [
+  'cost',
+  'energy',
+  'power',
+  'down',
+  'up',
+  'ping',
+  'sessionEnergy',
+  'sessionCost',
+  'codex5h',
+  'codexWeek',
+  'claude5h',
+  'claudeWeek',
+];
+export function trackBoot(
+  existing: BootEnergy | undefined,
+  now: number,
+  uptimeSeconds: number,
+  sessionId?: string,
+): BootEnergy {
+  const startedAt = now - Math.max(0, uptimeSeconds) * 1000;
+  if (
+    existing &&
+    existing.sessionId === sessionId &&
+    Math.abs(existing.startedAt - startedAt) < 60000
+  )
+    return existing;
+  return {
+    startedAt,
+    firstTrackedAt: now,
+    ...(sessionId ? { sessionId } : {}),
+    estimatedWh: 0,
+    measuredWh: 0,
+    trackedSeconds: 0,
+    cost: 0,
+    pricedWh: 0,
+  };
+}
+export function integrateBoot(
+  boot: BootEnergy,
+  from: number,
+  to: number,
+  watts: number,
+  measured: boolean,
+  tariff: number | null,
+) {
+  if (!Number.isFinite(watts) || watts < 0 || watts > 20000 || to <= from || to - from > 10000)
+    return;
+  const wh = (watts * (to - from)) / 3600000;
+  if (measured) boot.measuredWh += wh;
+  else boot.estimatedWh += wh;
+  boot.trackedSeconds += (to - from) / 1000;
+  if (tariff !== null) {
+    boot.pricedWh += wh;
+    boot.cost += (wh / 1000) * tariff;
+  }
+}
 export function parseElectricalStatus(input: unknown): NonNullable<PowerSample['electrical']> {
   const d = input as Record<string, unknown>;
   const value = (n: unknown, min: number, max: number) =>
@@ -30,6 +95,8 @@ export const WIDGETS: WidgetId[] = [
   'clock',
   'health',
   'insights',
+  'codex',
+  'claude',
 ];
 type Area = { x: number; y: number; width: number; height: number };
 export function locateDisplay<T extends { id: number; workArea: Area }>(
@@ -57,8 +124,11 @@ export function locateDisplay<T extends { id: number; workArea: Area }>(
   );
 }
 export const DEFAULT_SETTINGS: Settings = {
+  presentation: 'both',
+  presentationSetupComplete: false,
+  startupConfigured: false,
   compactMode: 'auto',
-  taskbar: { enabled: true, metrics: ['cost', 'energy'] },
+  taskbar: { enabled: true, metrics: ['cost', 'energy'], rotate: true },
   language: 'tr',
   widgets: ['energy', 'power', 'network'],
   tariff: null,
@@ -80,7 +150,7 @@ export const DEFAULT_SETTINGS: Settings = {
   networkInterface: 'auto',
   pingHost: '1.1.1.1',
   alwaysOnTop: true,
-  launchAtLogin: false,
+  launchAtLogin: true,
   reducedMotion: false,
   topOffset: 0,
   displayId: null,
@@ -111,6 +181,15 @@ export function validPrivateHost(value: string): boolean {
 export function validateSettings(input: unknown): Settings {
   if (!input || typeof input !== 'object') throw new Error('Invalid settings');
   const s = { ...input } as Settings;
+  s.presentation ??= 'both';
+  s.presentationSetupComplete ??= false;
+  s.startupConfigured ??= false;
+  if (
+    !['island', 'taskbar', 'app', 'both'].includes(s.presentation) ||
+    typeof s.presentationSetupComplete !== 'boolean' ||
+    typeof s.startupConfigured !== 'boolean'
+  )
+    throw new Error('Invalid presentation');
   // Additive schema-v1 defaults preserve backups made before personalization existed.
   s.opacity ??= 1;
   s.clickThrough ??= false;
@@ -140,14 +219,16 @@ export function validateSettings(input: unknown): Settings {
     throw new Error('Invalid widgets');
   s.compactMode ??= 'auto';
   s.taskbar ??= structuredClone(DEFAULT_SETTINGS.taskbar);
+  s.taskbar = { ...s.taskbar, rotate: s.taskbar.rotate ?? true };
   if (
     !['auto', 'metrics', 'droplet'].includes(s.compactMode) ||
     typeof s.taskbar?.enabled !== 'boolean' ||
+    typeof s.taskbar.rotate !== 'boolean' ||
     !Array.isArray(s.taskbar.metrics) ||
     s.taskbar.metrics.length < 1 ||
     s.taskbar.metrics.length > 2 ||
     new Set(s.taskbar.metrics).size !== s.taskbar.metrics.length ||
-    s.taskbar.metrics.some((m) => !['cost', 'energy', 'power', 'down', 'up', 'ping'].includes(m))
+    s.taskbar.metrics.some((m) => !TASKBAR_METRICS.includes(m))
   )
     throw new Error('Invalid taskbar preferences');
   if (s.tariff !== null) numberInRange(s.tariff, 0, 10000, 'tariff');
@@ -199,6 +280,9 @@ export function validateSettings(input: unknown): Settings {
     numberInRange(s.position.y, -100000, 100000, 'position.y');
   }
   return {
+    presentation: s.presentation,
+    presentationSetupComplete: s.presentationSetupComplete,
+    startupConfigured: s.startupConfigured,
     compactMode: s.compactMode,
     taskbar: structuredClone(s.taskbar),
     language: s.language,
@@ -296,5 +380,26 @@ export function validateStore(input: unknown): StoreData {
       pricedWh: numberInRange(day.pricedWh, 0, 1000000, 'pricedEnergy'),
     };
   });
-  return { schemaVersion: 1, settings, days };
+  let boot: BootEnergy | undefined;
+  if (data.boot) {
+    const b = data.boot;
+    if (b.sessionId !== undefined && !/^[a-f0-9]{64}$/.test(b.sessionId))
+      throw new Error('Invalid session identity');
+    boot = {
+      startedAt: numberInRange(b.startedAt, 0, Date.now() + 86400000, 'bootStart'),
+      firstTrackedAt: numberInRange(
+        b.firstTrackedAt,
+        b.startedAt,
+        Date.now() + 86400000,
+        'bootTrack',
+      ),
+      estimatedWh: numberInRange(b.estimatedWh, 0, 1e9, 'bootEnergy'),
+      measuredWh: numberInRange(b.measuredWh, 0, 1e9, 'bootEnergy'),
+      trackedSeconds: numberInRange(b.trackedSeconds, 0, 1e9, 'bootTime'),
+      cost: numberInRange(b.cost, 0, 1e12, 'bootCost'),
+      pricedWh: numberInRange(b.pricedWh, 0, 2e9, 'bootPricedEnergy'),
+      ...(b.sessionId ? { sessionId: b.sessionId } : {}),
+    };
+  }
+  return { schemaVersion: 1, settings, days, ...(boot ? { boot } : {}) };
 }

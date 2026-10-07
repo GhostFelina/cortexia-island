@@ -1,6 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IslandAPI, Settings, Snapshot, UpdateStatus, View } from '../shared/types';
 const api: IslandAPI = {
+  openUsagePage: (provider) => ipcRenderer.invoke('usage:page', provider),
+  onNavigate: (callback) => {
+    const listener = (_: unknown, view: View, section?: 'maintenance') => callback(view, section);
+    ipcRenderer.on('window:navigate', listener);
+    return () => ipcRenderer.removeListener('window:navigate', listener);
+  },
+  refreshUsage: () => ipcRenderer.invoke('usage:refresh'),
+  connectClaude: () => ipcRenderer.invoke('usage:claude-connect'),
+  disconnectClaude: () => ipcRenderer.invoke('usage:claude-disconnect'),
+  minimize: () => ipcRenderer.invoke('window:minimize'),
   onOpenExpanded: (callback) => {
     const listener = () => callback();
     ipcRenderer.on('window:open-expanded', listener);

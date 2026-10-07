@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.8 — 2026-10-07
+
+- Track this PC login/boot session alongside daily electricity: kWh, estimated cost and tracked coverage. Preserve the session through app restarts; flush final valid readings and exclude sleep/offline gaps. Enable login startup once on migration; closing the window keeps tracking in the tray.
+- Add original restrained electricity glint between the cost and power cards, with reduced-motion support.
+- Introduce island, bar-only, normal native application and combined modes with first-run mode selection, five Settings sections, native right-click menus and recovery routes.
+- Add official read-only Codex app-server usage windows (60-second refresh and notifications) and a reversible Claude Code status-line bridge. Separate actual 5-hour/weekly windows, missing data, expired windows and stale reports. No third-party OAuth collection or browser scraping.
+- Add the requested ten-second electricity/Codex/Claude bar rotation, Windows hover pause/resume, and fixed-metric fallback.
+- Extend user-selected Windows/Mac bar readings with PC-session energy/cost and AI usage; ten built-in widgets.
+- Gate packaged releases on both island interactions and actual native-frame application startup/minimize/resize/background-close checks.
+
 ## 0.1.0-alpha.7 — 2026-10-07
 
 - Fix packaged startup: include shared runtime city-list modules imported by the online tariff provider. Installed alpha.6 verification caught this omission; alpha.5/6 packages should be upgraded.

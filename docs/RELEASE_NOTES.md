@@ -1,21 +1,17 @@
-# Cortexia Island 0.1.0-alpha.7
+# Cortexia Island 0.1.0-alpha.8
 
-Alpha.7 fixes a packaging omission found during installed alpha.6 verification: the online tariff provider's shared city-list runtime module is included. Actual packaged-app smoke now gates publication for every architecture. Alpha.5/6 packages should be upgraded; settings and history are retained. Alpha.6 functionality follows below.
+Electricity remains the focus: **used electricity and estimated cost for this PC session**, plus today's total, live power and a quiet miniature electricity animation.
 
-Electricity-first OLED black island with centered compact readings and eight selectable widgets.
+- PC-session kWh/cost survive app restart in the same login/boot. Login startup enabled once on migration and configurable; closing the window keeps tracking in tray. Sleep, pre-login, closed-app and missing-reading gaps are excluded.
+- First setup asks for island, bar-only, normal application or island + bar. Five clear Settings sections, right-click app menus, native app frame/minimize/resize and visibility recovery.
+- Ten selectable widgets: new official Codex 5-hour/weekly usage and reversible Claude Code status-line connection. Actual percentages/reset times, missing/stale states and source labels. Codex refreshes at 60 seconds/notifications. Claude requires running signed-in Claude Code; its status-line timer is not an independent web backend poll. Web/desktop usage appears only when the CLI reports it. See AI_USAGE.md.
+- Default 10-second bar cycle: PC electricity cost/kWh → Codex 5-hour/week → Claude 5-hour/week. Windows hover pauses/resumes; General settings can return to fixed choices. Rotation does not change backend refresh intervals.
+- Windows/Mac bar selection includes session energy/cost and AI usage. Windows is an independent overlay, not a weather-button replacement; auto-hidden/non-bottom taskbars are unsupported.
+- Retains city/district-only automatic EPDK standard national residential lower-tier setup, backups/restore/CSV, update checks, cross-monitor drag/corner resize, centered compact view, droplet and reduced motion.
 
-- **Location-only setup:** enter just a Turkish city and district. EPDK supplies the current standard residential lower-tier tariff with reviewed 2026 taxes. No unit price, subscription or tier input. Source and dates stay visible; location stays local. This is a standard-tariff estimate, not the verified household contract or invoice.
-- **Windows live taskbar indicator:** an independent lower-left overlay displays one or two chosen metrics: estimated cost, tracked kWh, watts, download, upload or ping. Click to open; disable in Settings. This does not replace Microsoft's weather button. Auto-hidden or non-bottom taskbars do not show it.
-- **Mac droplet:** compact mode defaults to a droplet on macOS, with click-open, elastic pull-open and a native drag grip. Reduced motion supported. Forced droplet interaction was tested on Windows; real MacBook validation remains pending.
-- **Electrical health:** compatible Shelly meter voltage, current, frequency, meter temperature, power factor and protection reports. Unsupported fields remain blank; no grid or PSU safety diagnosis.
-- **Energy insights:** tracked average power and explicitly constant-power 100-hour projections, plus understandable energy facts.
+Checks: 20 unit tests, strict types/build, dependency audit, native island smoke with both connected Windows displays, new quota/mode/menu/session states, and native app-frame smoke. Actual packaged executables in both modes gate Windows x64 and Mac arm64/x64 publication.
 
-Retains free movement across monitors, edge attachment, corner resizing of metric/detail views, hide/opacity/click-through, tray/Dock icons, 14 local backups, validated restore, CSV export, explicit updates and Turkish/English UI.
+Power defaults to a CPU model, not wall measurement; cost is a standard-tariff PC estimate, not the household invoice. Only tracked active time is accumulated. Real meter/MacBook/notebook validation and signing/notarization remain pending. Tax review expires after 2026.
 
-Verified locally: strict type/build checks, 16 unit tests, two-display Windows native smoke, taskbar selection/hide/open, droplet stretch/release, missing/meter electrical presentation, location-only setup and actual online EPDK application. GitHub runs quality and packaging for Windows x64 and both Mac architectures.
-
-**Measurement:** power defaults to a model, not a wall reading. Only running/tracked time is accumulated. Network traffic is not a speed test. Cost is a PC standard-tariff estimate, not a household bill.
-
-**Alpha limits:** unsigned packages, Apple notarization and signed updates pending. Shelly supports local unauthenticated single-channel RPC; real meter/MacBook/notebook validation remains pending. Tax rules expire after 2026 until reviewed.
-
-Windows x64 `.exe`; Apple Silicon arm64 and Intel x64 `.dmg`/`.zip`; SHA256 manifests included.
+Windows x64 `.exe`; Apple Silicon and Intel `.dmg`/`.zip`; versioned update manifests and SHA256 checksums. Data and existing tariff/history are retained on upgrade.
+The taskbar cost/kWh pair also includes the restrained electricity glint. Live updates preserve the indicator DOM so the animation continues smoothly; reduced-motion disables it.

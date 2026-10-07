@@ -1,3 +1,4 @@
+import { barMetrics } from '../shared/bar';
 import {
   createElement,
   Wifi,
@@ -32,6 +33,7 @@ import type {
   UpdateStatus,
   TaskbarAPI,
   TaskbarMetric,
+  UsageSample,
 } from '../shared/types';
 declare global {
   interface Window {
@@ -45,6 +47,7 @@ window.addEventListener('error', (e) => window.__islandErrors?.push(e.message));
 window.addEventListener('unhandledrejection', (e) => window.__islandErrors?.push(String(e.reason)));
 const api = window.island;
 let resizingPointer = false;
+let dropletPointer = false;
 const root = document.querySelector<HTMLDivElement>('#app')!;
 let settings: Settings;
 let snapshot: Snapshot | null = null;
@@ -52,6 +55,8 @@ let info: AppInfo;
 let view: View = 'expanded';
 let docked = true;
 let showHistory = false;
+type SettingsTab = 'general' | 'energy' | 'widgets' | 'network' | 'maintenance';
+let settingsTab: SettingsTab = 'general';
 let update: UpdateStatus = { phase: 'idle' };
 const icons: Record<string, IconNode> = {
   wifi: Wifi,
@@ -151,6 +156,22 @@ const catalog: Record<
     ],
     icon: 'chart',
   },
+  codex: {
+    name: ['Codex limitleri', 'Codex limits'],
+    description: [
+      'Canlı 5 saatlik ve haftalık hesap kullanımı',
+      'Live five-hour and weekly account usage',
+    ],
+    icon: 'cpu',
+  },
+  claude: {
+    name: ['Claude limitleri', 'Claude limits'],
+    description: [
+      'Claude Code’dan 5 saatlik ve haftalık veri',
+      'Five-hour and weekly reports from Claude Code',
+    ],
+    icon: 'chart',
+  },
 };
 const taskbarLabels: Record<TaskbarMetric, [string, string]> = {
   cost: ['Bugün · tahmini', 'Today · estimated'],
@@ -159,7 +180,99 @@ const taskbarLabels: Record<TaskbarMetric, [string, string]> = {
   down: ['İndirme · Mbps', 'Download · Mbps'],
   up: ['Yükleme · Mbps', 'Upload · Mbps'],
   ping: ['Ping · ms', 'Ping · ms'],
+  sessionEnergy: ['PC oturumu · kWh', 'PC session · kWh'],
+  sessionCost: ['Oturum · tahmini', 'Session · estimated'],
+  codex5h: ['Codex · 5h %', 'Codex · 5h %'],
+  codexWeek: ['Codex · hafta %', 'Codex · week %'],
+  claude5h: ['Claude · 5h %', 'Claude · 5h %'],
+  claudeWeek: ['Claude · hafta %', 'Claude · week %'],
 };
+function usageCard(id: 'codex' | 'claude') {
+  return `<section class="usage-card ${id}" data-widget-card="${id}"><div class="card-heading"><span>${icon(id === 'codex' ? 'cpu' : 'chart')}${id === 'codex' ? 'CODEX' : 'CLAUDE'}</span><span class="source-chip" data-value="${id}-status">—</span></div>${(['fiveHour', 'weekly'] as const).map((window) => `<div class="usage-row"><div><span>${window === 'fiveHour' ? t('5 saatlik kullanım', '5-hour usage') : t('Haftalık kullanım', 'Weekly usage')}</span><strong data-value="${id}-${window}">—</strong></div><div class="usage-track" role="progressbar" aria-label="${id} ${window}" aria-valuemin="0" aria-valuemax="100" data-usage="${id}-${window}"><i></i></div><small data-value="${id}-${window}-reset">—</small></div>`).join('')}<p class="microcopy" data-value="${id}-checked">—</p><div class="usage-actions"><button data-action="usage-refresh">${t('Yenile', 'Refresh')}</button>${id === 'claude' ? `<button data-action="claude-connect">${t('Claude Code’u bağla', 'Connect Claude Code')}</button>` : ''}<button data-action="${id}-usage-page">${t('Kullanım sayfası', 'Usage page')}</button></div></section>`;
+}
+function widgetCardsHtml() {
+  const factory: Record<WidgetId, () => string> = {
+    network: networkCard,
+    power: powerCard,
+    energy: energyCard,
+    health: healthCard,
+    insights: insightsCard,
+    codex: () => usageCard('codex'),
+    claude: () => usageCard('claude'),
+    system: () => smallCard('system'),
+    battery: () => smallCard('battery'),
+    clock: () => smallCard('clock'),
+  };
+  return settings.widgets
+    .map(
+      (id, i) =>
+        factory[id]() +
+        (['energy', 'power'].includes(id) &&
+        ['energy', 'power'].includes(settings.widgets[i + 1]) &&
+        id !== settings.widgets[i + 1]
+          ? `<div class="energy-bridge" aria-hidden="true"><span></span>${icon('bolt')}</div>`
+          : ''),
+    )
+    .join('');
+}
+function arrangeSettings() {
+  const form = root.querySelector<HTMLFormElement>('#settings-form')!;
+  const sections = [...form.querySelectorAll<HTMLElement>(':scope > section')];
+  for (const section of sections) {
+    const title = section.querySelector('h2')?.textContent ?? '';
+    section.dataset.settingsTab =
+      section.id === 'widget-list'
+        ? 'widgets'
+        : section.classList.contains('maintenance')
+          ? 'maintenance'
+          : section.classList.contains('tariff-setup') ||
+              title.includes('ENERJİ') ||
+              title.includes('ENERGY')
+            ? 'energy'
+            : title.includes('BAĞLANTI') || title.includes('CONNECTION')
+              ? 'network'
+              : 'general';
+  }
+  const nav = document.createElement('nav');
+  nav.className = 'settings-nav';
+  nav.setAttribute('aria-label', t('Ayar bölümleri', 'Settings sections'));
+  const tabs: Record<SettingsTab, [string, string]> = {
+    general: ['Genel', 'General'],
+    energy: ['Elektrik', 'Energy'],
+    widgets: ['Widget’lar', 'Widgets'],
+    network: ['İnternet', 'Network'],
+    maintenance: ['Veri & sürüm', 'Data & version'],
+  };
+  nav.innerHTML = (Object.keys(tabs) as SettingsTab[])
+    .map(
+      (tab) =>
+        `<button type="button" data-tab="${tab}" aria-pressed="${settingsTab === tab}">${t(...tabs[tab])}</button>`,
+    )
+    .join('');
+  form.prepend(nav);
+  const activate = (tab: SettingsTab) => {
+    settingsTab = tab;
+    for (const section of sections) section.hidden = section.dataset.settingsTab !== tab;
+    nav
+      .querySelectorAll<HTMLElement>('[data-tab]')
+      .forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.tab === tab)));
+    form.scrollTop = 0;
+  };
+  nav
+    .querySelectorAll<HTMLElement>('[data-tab]')
+    .forEach((button) =>
+      button.addEventListener('click', () => activate(button.dataset.tab as SettingsTab)),
+    );
+  form.addEventListener(
+    'invalid',
+    (event) => {
+      const section = (event.target as Element)?.closest<HTMLElement>('[data-settings-tab]');
+      if (section) activate(section.dataset.settingsTab as SettingsTab);
+    },
+    true,
+  );
+  activate(settingsTab);
+}
 function isDroplet() {
   return (
     view === 'compact' &&
@@ -198,6 +311,8 @@ function bindDroplet() {
     origin = event.clientY;
     stretch = 0;
     active = true;
+    dropletPointer = true;
+    void api?.setPointerPassthrough(false);
     suppressClick = false;
     drop.setPointerCapture(event.pointerId);
     drop.style.transition = 'none';
@@ -212,6 +327,7 @@ function bindDroplet() {
   const finish = (event: PointerEvent) => {
     if (!active) return;
     active = false;
+    dropletPointer = false;
     if (drop.hasPointerCapture(event.pointerId)) drop.releasePointerCapture(event.pointerId);
     drop.style.transition = settings.reducedMotion
       ? 'none'
@@ -221,6 +337,11 @@ function bindDroplet() {
   };
   drop.addEventListener('pointerup', finish);
   drop.addEventListener('pointercancel', finish);
+  drop.addEventListener('lostpointercapture', () => {
+    active = false;
+    dropletPointer = false;
+    drop.style.transform = '';
+  });
   drop.addEventListener('click', (event) => {
     if (suppressClick) {
       event.preventDefault();
@@ -239,7 +360,7 @@ function powerCard() {
   return `<section class="power-card" data-widget-card="power"><div class="power-main"><div class="power-orb">${icon('bolt')}</div><div><span class="metric-label">${t('ANLIK GÜÇ', 'LIVE POWER')}</span><div class="power-number"><span data-value="watts">—</span><small> W</small></div></div><span class="source-chip" data-value="source">${t('TAHMİN', 'ESTIMATE')}</span></div><div class="power-track"><span data-power-fill></span></div><p class="microcopy" data-value="power-note">${t('Yük profiline göre hesaplanır', 'Calculated from your load profile')}</p></section>`;
 }
 function energyCard() {
-  return `<section class="energy-card money-hero" data-widget-card="energy"><div class="money-heading"><span>${t('BUGÜNÜN TAHMİNİ MALİYETİ', 'ESTIMATED COST TODAY')}</span><span class="energy-tag">${icon('bolt')}${t('ELEKTRİK', 'ENERGY')}</span></div><div class="money-total" data-value="hero-cost">—</div><button class="tariff-cta" data-action="tariff" ${settings.tariff !== null ? 'hidden' : ''}>${t('Elektrik tarifeni ekle', 'Set your electricity tariff')}${icon('plus')}</button><div class="energy-summary"><div><span>${t('Takip edilen tüketim', 'Tracked energy')}</span><strong><span data-value="energy">—</span><small>kWh</small></strong></div><div><span>${t('Bu güçle saatlik tahmin', 'Estimated hourly at this power')}</span><strong data-value="hourly-cost">—</strong></div></div><p class="microcopy" data-value="tracked">${t('Yalnızca uygulama açıkken takip edilir', 'Tracked while running')}</p></section>`;
+  return `<section class="energy-card money-hero" data-widget-card="energy"><div class="money-heading"><span>${t('BU PC OTURUMUNUN TAHMİNİ MALİYETİ', 'ESTIMATED COST THIS PC SESSION')}</span><span class="energy-tag">${icon('bolt')}${t('ELEKTRİK', 'ENERGY')}</span></div><div class="money-total" data-value="hero-cost">—</div><button class="tariff-cta" data-action="tariff" ${settings.tariff !== null ? 'hidden' : ''}>${t('Elektrik tarifeni bul', 'Find electricity tariff')}${icon('plus')}</button><div class="energy-summary"><div><span>${t('Kullanılan elektrik · takip edilen', 'Electricity used · tracked')}</span><strong><span data-value="session-energy">—</span><small>kWh</small></strong></div><div><span>${t('Bu güçle saatlik tahmin', 'Estimated hourly at this power')}</span><strong data-value="hourly-cost">—</strong></div></div><div class="daily-summary" data-value="daily-summary">—</div><p class="microcopy" data-value="tracked">${t('Oturum açıldıktan sonra uygulama aktifken takip edilir', 'Tracked while running after login')}</p></section>`;
 }
 function smallCard(id: WidgetId) {
   const c = catalog[id];
@@ -256,32 +377,44 @@ function compactWidget(id: WidgetId) {
   if (id === 'power')
     return `<span class="compact-stat">${value('watts', 'W', 'bolt', 'warm')}<span class="compact-context"><span data-value="source">${t('TAHMİN', 'ESTIMATE')}</span><span>· ${t('güç', 'power')}</span></span></span>`;
   if (id === 'energy')
-    return `<span class="compact-stat compact-money"><span class="compact-value"><strong data-value="compact-cost">—</strong></span><span class="compact-context">${t('BUGÜN', 'TODAY')}<span class="context-dot">·</span><b data-value="energy">—</b><span>kWh</span></span></span>`;
+    return `<span class="compact-stat compact-money"><span class="compact-value"><strong data-value="compact-cost">—</strong></span><span class="compact-context">${t('PC OTURUMU', 'PC SESSION')}<span class="context-dot">·</span><b data-value="session-energy">—</b><span>kWh</span></span></span>`;
   if (id === 'system')
     return `<span class="compact-stat">${value('compact-cpu', '%', 'cpu')}<span class="compact-context">CPU</span></span>`;
   if (id === 'battery')
     return `<span class="compact-stat">${value('compact-battery', '%', 'battery')}<span class="compact-context">${t('BATARYA', 'BATTERY')}</span></span>`;
   if (id === 'health')
     return `<span class="compact-stat">${value('voltage', 'V', 'shield')}<span class="compact-context">${t('ÖLÇER', 'METER')}</span></span>`;
+  if (id === 'codex' || id === 'claude')
+    return `<span class="compact-stat">${value(id + '-fiveHour', '%', 'chart')}<span class="compact-context">${id === 'codex' ? 'CODEX' : 'CLAUDE'} · 5h</span></span>`;
   if (id === 'insights')
     return `<span class="compact-stat">${value('average-power', '', 'chart')}<span class="compact-context">${t('ORTALAMA', 'AVERAGE')}</span></span>`;
   return `<span class="compact-stat">${value('clock', '', 'clock')}<span class="compact-context">${t('YEREL SAAT', 'LOCAL TIME')}</span></span>`;
 }
 function render() {
-  root.className = `view-${view}${settings.reducedMotion ? ' reduced-motion' : ''}${docked ? ' edge-attached' : ''}${isDroplet() ? ' droplet-mode' : ''}`;
+  root.className = `view-${view}${settings.reducedMotion ? ' reduced-motion' : ''}${docked && settings.presentation !== 'app' ? ' edge-attached' : ''}${isDroplet() ? ' droplet-mode' : ''}${settings.presentation === 'app' ? ' application-mode' : ''}`;
   if (isDroplet()) {
     root.innerHTML = `<main class="island droplet-island"><div class="droplet-grip drag-area" title="${t('Sürükleyerek taşı', 'Drag to move')}"></div><button class="droplet-control" aria-label="${t('Adayı aç · aşağı çekerek esnet', 'Open island · pull down to stretch')}">${icon('droplet')}<span class="drop-glint"></span></button></main>`;
     bindDroplet();
   } else if (view === 'compact') {
     root.innerHTML = `<main class="island compact"><div class="compact-brand drag-area"><span class="lens"></span></div><button class="compact-readout" data-action="expand" aria-label="${t('Adayı genişlet', 'Expand island')}">${settings.widgets.slice(0, 2).map(compactWidget).join('<span class="compact-separator"></span>')}</button>${button('expand', t('Genişlet', 'Expand'), 'chevron')}</main>`;
   } else if (view === 'expanded') {
-    root.innerHTML = `<main class="island expanded"><header><div class="brand drag-area"><span class="lens"></span><span>Cortexia <b>Island</b></span><span class="beta">${info.preview ? 'DEMO' : 'α'}</span></div><div class="header-controls">${button('settings', t('Ayarlar', 'Settings'), 'gear')}${button('compact', t('Küçült', 'Collapse'), 'minus')}</div></header><div class="scroll-body">${showHistory ? historyHtml() : settings.widgets.map((id) => (id === 'network' ? networkCard() : id === 'power' ? powerCard() : id === 'energy' ? energyCard() : id === 'health' ? healthCard() : id === 'insights' ? insightsCard() : smallCard(id))).join('')}</div><footer><span class="footer-status"><i class="status-dot" data-status></i><span data-value="footer">${t('Ölçüm başlıyor', 'Starting readings')}</span></span><div class="footer-actions">${button('history', t('Tüketim geçmişi', 'Energy history'), 'chart', showHistory ? 'active' : '')}${button('widgets', t('Widget ekle', 'Add widgets'), 'plus')}</div></footer><div class="error-banner" data-error hidden></div></main>`;
+    root.innerHTML = `<main class="island expanded"><header><div class="brand drag-area"><span class="lens"></span><span>Cortexia <b>Island</b></span><span class="beta">${info.preview ? 'DEMO' : 'α'}</span></div><div class="header-controls">${button('settings', t('Ayarlar', 'Settings'), 'gear')}${button('compact', t('Küçült', 'Collapse'), 'minus')}</div></header><div class="scroll-body">${showHistory ? historyHtml() : widgetCardsHtml()}</div><footer><span class="footer-status"><i class="status-dot" data-status></i><span data-value="footer">${t('Ölçüm başlıyor', 'Starting readings')}</span></span><div class="footer-actions">${button('history', t('Tüketim geçmişi', 'Energy history'), 'chart', showHistory ? 'active' : '')}${button('widgets', t('Widget ekle', 'Add widgets'), 'plus')}</div></footer><div class="error-banner" data-error hidden></div></main>`;
   } else {
     root.innerHTML = settingsHtml();
   }
   if (view === 'settings') {
     insertPersonalization();
     root.querySelector('#settings-form')?.insertAdjacentHTML('afterbegin', tariffSetupHtml());
+    arrangeSettings();
+    const energySection = root.querySelector('[name="powerMode"]')?.closest('section');
+    if (energySection) {
+      const advanced = document.createElement('details');
+      advanced.className = 'advanced-energy';
+      advanced.innerHTML = `<summary>${t('Güç kaynağı ve cihaz profili · gelişmiş', 'Power source and device profile · advanced')}</summary>`;
+      for (const child of [...energySection.children])
+        if (!child.classList.contains('section-title')) advanced.appendChild(child);
+      energySection.appendChild(advanced);
+    }
   }
   root.querySelectorAll('.lens').forEach((el) => {
     const image = document.createElement('img');
@@ -343,7 +476,7 @@ function settingsHtml() {
     ...settings.widgets,
     ...(Object.keys(catalog) as WidgetId[]).filter((id) => !selected.has(id)),
   ];
-  return `<main class="island settings"><header><div class="brand drag-area"><span class="lens"></span><span>${t('Ada ayarları', 'Island settings')}</span></div>${button('expand', t('Geri dön', 'Go back'), 'close')}</header><form id="settings-form" class="scroll-body settings-body"><section id="widget-list"><div class="section-title">${icon('grid')}<h2>${t('ADANI OLUŞTUR', 'BUILD YOUR ISLAND')}</h2><span>${settings.widgets.length}/8</span></div><p class="section-intro">${t('İstediğin widget’ları ekle, sıralarını değiştir.', 'Choose your widgets and arrange their order.')}</p><div class="widget-list">${widgets
+  return `<main class="island settings"><header><div class="brand drag-area"><span class="lens"></span><span>${t('Ada ayarları', 'Island settings')}</span>${info.preview ? '<span class="demo-badge">DEMO</span>' : ''}</div>${button('expand', t('Geri dön', 'Go back'), 'close')}</header><form id="settings-form" class="scroll-body settings-body"><section id="widget-list"><div class="section-title">${icon('grid')}<h2>${t('ADANI OLUŞTUR', 'BUILD YOUR ISLAND')}</h2><span>${settings.widgets.length}/10</span></div><p class="section-intro">${t('İstediğin widget’ları ekle, sıralarını değiştir.', 'Choose your widgets and arrange their order.')}</p><div class="widget-list">${widgets
     .map((id) => {
       const c = catalog[id],
         idx = settings.widgets.indexOf(id);
@@ -351,7 +484,7 @@ function settingsHtml() {
     })
     .join(
       '',
-    )}</div></section><section><div class="section-title">${icon('bolt')}<h2>${t('ENERJİ & ELEKTRİK', 'ENERGY & ELECTRICITY')}</h2></div><div class="form-grid"><label>${t('Güç kaynağı', 'Power source')}<select name="powerMode"><option value="estimate" ${settings.powerMode === 'estimate' ? 'selected' : ''}>${t('Yük profili · tahmin', 'Load profile · estimate')}</option><option value="shelly" ${settings.powerMode === 'shelly' ? 'selected' : ''}>Shelly Gen2/Gen3 · ${t('ölçüm', 'meter')}</option></select></label><label>${t('Güç ölçer yerel IP', 'Power meter local IP')}<input name="meterHost" value="${e(settings.meterHost)}" placeholder="192.168.1.50" maxlength="15"></label><label>${t('Boşta güç (W)', 'Idle power (W)')}<input name="idleWatts" type="number" min="0" max="10000" step="1" value="${settings.idleWatts}"></label><label>${t('Yoğun yük (W)', 'Full load (W)')}<input name="maxWatts" type="number" min="0" max="20000" step="1" value="${settings.maxWatts}"></label><div class="automatic-price"><span>${t('Otomatik elektrik tarifesi', 'Automatic electricity tariff')}</span><strong>${settings.tariff === null ? t('Şehir / ilçe ile kurulacak', 'Set up with city / district') : money(settings.tariff) + ' / kWh'}</strong></div></div><p class="microcopy">${t('Yük profili priz ölçümü değildir; GPU, ekran ve PSU kayıpları ayrıca değişebilir. Varsayılan 65–350 W profilini cihazına göre ayarla. Shelly, yalnızca PC’nin bağlı olduğu prizi ölçmelidir.', 'A load profile is not a wall measurement; GPU, monitor and PSU losses vary. Calibrate the default 65–350 W profile. Connect only the PC to the metered outlet.')}</p><p class="microcopy">${t('Tarife değişikliği sonraki örneklere uygulanır. Tüketim yalnızca açıkken takip edilir; bu tutar toplam ev faturası değildir.', 'Tariff changes apply to future samples. Only running time is tracked; this is not your total household bill.')}</p></section><section><div class="section-title">${icon('wifi')}<h2>${t('BAĞLANTI', 'CONNECTION')}</h2></div><div class="form-grid"><label>${t('Ağ adaptörü', 'Network adapter')}<select name="networkInterface"><option value="auto">${t('Otomatik · varsayılan rota', 'Automatic · default route')}</option>${(snapshot?.network.interfaces ?? []).map((n) => `<option value="${e(n.id)}" ${n.id === settings.networkInterface ? 'selected' : ''}>${e(n.name)}</option>`).join('')}</select></label><label>${t('Ping hedefi', 'Ping target')}<input name="pingHost" value="${e(settings.pingHost)}" maxlength="253" required></label></div><p class="microcopy">${t('Hızlar adaptördeki mevcut trafiktir. İnternet paketinin azami hızını ölçen bir speedtest değildir. Ping seçili hedefi kontrol eder; engellenen ICMP yanıtları bağlantı sorunu gibi görünebilir.', 'Rates show current adapter traffic, not your plan’s maximum speed. Ping checks the selected target; blocked ICMP replies can appear as a connectivity issue.')}</p></section><section><div class="section-title">${icon('gear')}<h2>${t('GÖRÜNÜM & DAVRANIŞ', 'APPEARANCE & BEHAVIOR')}</h2></div><div class="form-grid"><label>${t('Dil', 'Language')}<select name="language"><option value="tr" ${settings.language === 'tr' ? 'selected' : ''}>Türkçe</option><option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option></select></label><label>${t('Ekran', 'Display')}<select name="displayId"><option value="auto">${t('Birincil ekran', 'Primary display')}</option>${info.displays.map((d) => `<option value="${d.id}" ${d.id === settings.displayId ? 'selected' : ''}>${e(d.label)}</option>`).join('')}</select></label><label>${t('Üst boşluk (px)', 'Top offset (px)')}<input name="topOffset" type="number" min="0" max="300" value="${settings.topOffset}"></label></div><div class="check-options"><label><input type="checkbox" name="alwaysOnTop" ${settings.alwaysOnTop ? 'checked' : ''}>${t('Diğer pencerelerin üzerinde tut', 'Keep on top')}</label><label><input type="checkbox" name="launchAtLogin" ${settings.launchAtLogin ? 'checked' : ''}>${t('Oturum açıldığında başlat', 'Launch at login')}</label><label><input type="checkbox" name="reducedMotion" ${settings.reducedMotion ? 'checked' : ''}>${t('Hareketleri azalt', 'Reduce motion')}</label></div></section><div class="form-feedback" role="status" data-feedback></div><button class="primary-button" type="submit">${t('Değişiklikleri kaydet', 'Save changes')}</button><section class="maintenance"><div class="section-title">${icon('shield')}<h2>${t('YEDEK & GÜNCELLEME', 'BACKUP & UPDATE')}</h2></div><div class="maintenance-buttons"><button type="button" data-action="backup">${t('Yedek al', 'Export backup')}</button><button type="button" data-action="restore">${t('Geri yükle', 'Restore')}</button><button type="button" data-action="csv">CSV</button></div><p class="microcopy">${t('Verilerin bu cihazda saklanır. Ayar değişikliklerinde ve çıkışta otomatik yedek alınır; son 14 yedek korunur.', 'Your data stays on this device. Settings changes and shutdown create backups; the last 14 are retained.')}</p><div class="version-row"><span>Cortexia Island <b>v${e(info.version)}</b></span><button type="button" data-action="update" data-update-button>${t('Güncelleme ara', 'Check updates')}</button></div><p class="microcopy" data-update-status></p></section><div class="settings-end"><span>Ctrl / ⌘ + Shift + I · ${t('göster / gizle', 'show / hide')}</span><button type="button" data-action="hide">${t('Gizle', 'Hide')}</button><button type="button" data-action="quit">${t('Çıkış', 'Quit')}</button></div></form></main>`;
+    )}</div></section><section><div class="section-title">${icon('bolt')}<h2>${t('ENERJİ & ELEKTRİK', 'ENERGY & ELECTRICITY')}</h2></div><div class="form-grid"><label>${t('Güç kaynağı', 'Power source')}<select name="powerMode"><option value="estimate" ${settings.powerMode === 'estimate' ? 'selected' : ''}>${t('Yük profili · tahmin', 'Load profile · estimate')}</option><option value="shelly" ${settings.powerMode === 'shelly' ? 'selected' : ''}>Shelly Gen2/Gen3 · ${t('ölçüm', 'meter')}</option></select></label><label>${t('Güç ölçer yerel IP', 'Power meter local IP')}<input name="meterHost" value="${e(settings.meterHost)}" placeholder="192.168.1.50" maxlength="15"></label><label>${t('Boşta güç (W)', 'Idle power (W)')}<input name="idleWatts" type="number" min="0" max="10000" step="1" value="${settings.idleWatts}"></label><label>${t('Yoğun yük (W)', 'Full load (W)')}<input name="maxWatts" type="number" min="0" max="20000" step="1" value="${settings.maxWatts}"></label><div class="automatic-price"><span>${t('Otomatik elektrik tarifesi', 'Automatic electricity tariff')}</span><strong>${settings.tariff === null ? t('Şehir / ilçe ile kurulacak', 'Set up with city / district') : money(settings.tariff) + ' / kWh'}</strong></div></div><p class="microcopy">${t('Yük profili priz ölçümü değildir; GPU, ekran ve PSU kayıpları ayrıca değişebilir. Varsayılan 65–350 W profilini cihazına göre ayarla. Shelly, yalnızca PC’nin bağlı olduğu prizi ölçmelidir.', 'A load profile is not a wall measurement; GPU, monitor and PSU losses vary. Calibrate the default 65–350 W profile. Connect only the PC to the metered outlet.')}</p><p class="microcopy">${t('Tarife değişikliği sonraki örneklere uygulanır. Tüketim yalnızca açıkken takip edilir; bu tutar toplam ev faturası değildir.', 'Tariff changes apply to future samples. Only running time is tracked; this is not your total household bill.')}</p></section><section><div class="section-title">${icon('wifi')}<h2>${t('BAĞLANTI', 'CONNECTION')}</h2></div><div class="form-grid"><label>${t('Ağ adaptörü', 'Network adapter')}<select name="networkInterface"><option value="auto">${t('Otomatik · varsayılan rota', 'Automatic · default route')}</option>${(snapshot?.network.interfaces ?? []).map((n) => `<option value="${e(n.id)}" ${n.id === settings.networkInterface ? 'selected' : ''}>${e(n.name)}</option>`).join('')}</select></label><label>${t('Ping hedefi', 'Ping target')}<input name="pingHost" value="${e(settings.pingHost)}" maxlength="253" required></label></div><p class="microcopy">${t('Hızlar adaptördeki mevcut trafiktir. İnternet paketinin azami hızını ölçen bir speedtest değildir. Ping seçili hedefi kontrol eder; engellenen ICMP yanıtları bağlantı sorunu gibi görünebilir.', 'Rates show current adapter traffic, not your plan’s maximum speed. Ping checks the selected target; blocked ICMP replies can appear as a connectivity issue.')}</p></section><section><div class="section-title">${icon('gear')}<h2>${t('GÖRÜNÜM & DAVRANIŞ', 'APPEARANCE & BEHAVIOR')}</h2></div><div class="form-grid"><label>${t('Dil', 'Language')}<select name="language"><option value="tr" ${settings.language === 'tr' ? 'selected' : ''}>Türkçe</option><option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option></select></label><label>${t('Ekran', 'Display')}<select name="displayId"><option value="auto">${t('Birincil ekran', 'Primary display')}</option>${info.displays.map((d) => `<option value="${d.id}" ${d.id === settings.displayId ? 'selected' : ''}>${e(d.label)}</option>`).join('')}</select></label><label>${t('Üst boşluk (px)', 'Top offset (px)')}<input name="topOffset" type="number" min="0" max="300" value="${settings.topOffset}"></label></div><div class="check-options"><label><input type="checkbox" name="alwaysOnTop" ${settings.alwaysOnTop ? 'checked' : ''}>${t('Diğer pencerelerin üzerinde tut', 'Keep on top')}</label><label><input type="checkbox" name="launchAtLogin" ${settings.launchAtLogin ? 'checked' : ''}>${t('Oturum açıldığında başlat', 'Launch at login')}</label><label><input type="checkbox" name="reducedMotion" ${settings.reducedMotion ? 'checked' : ''}>${t('Hareketleri azalt', 'Reduce motion')}</label></div></section><section class="maintenance"><div class="section-title">${icon('shield')}<h2>${t('YEDEK & GÜNCELLEME', 'BACKUP & UPDATE')}</h2></div><div class="maintenance-buttons"><button type="button" data-action="backup">${t('Yedek al', 'Export backup')}</button><button type="button" data-action="restore">${t('Geri yükle', 'Restore')}</button><button type="button" data-action="csv">CSV</button></div><p class="microcopy">${t('Verilerin bu cihazda saklanır. Ayar değişikliklerinde ve çıkışta otomatik yedek alınır; son 14 yedek korunur.', 'Your data stays on this device. Settings changes and shutdown create backups; the last 14 are retained.')}</p><div class="version-row"><span>Cortexia Island <b>v${e(info.version)}</b></span><button type="button" data-action="update" data-update-button>${t('Güncelleme ara', 'Check updates')}</button></div><p class="microcopy" data-update-status></p></section><div class="settings-end"><span>Ctrl / ⌘ + Shift + I · ${t('göster / gizle', 'show / hide')}</span><button type="button" data-action="hide">${t('Gizle', 'Hide')}</button><button type="button" data-action="quit">${t('Çıkış', 'Quit')}</button></div></form><div class="settings-save"><div class="form-feedback" role="status" data-feedback></div><button class="primary-button" form="settings-form" type="submit">${t('Değişiklikleri kaydet', 'Save changes')}</button></div></main>`;
 }
 const downHistory: number[] = [];
 const upHistory: number[] = [];
@@ -412,6 +545,31 @@ function paint() {
         : money(0),
   );
   const unpriced = Math.max(0, day.estimatedWh + day.measuredWh - day.pricedWh);
+  const boot = snapshot.boot;
+  const sessionWh = boot ? boot.estimatedWh + boot.measuredWh : null;
+  const sessionUnpriced = boot
+    ? Math.max(0, boot.estimatedWh + boot.measuredWh - boot.pricedWh)
+    : 0;
+  const sessionPriced = boot && (boot.pricedWh > 0 || settings.tariff !== null);
+  setText('session-energy', sessionWh === null ? '—' : fmt(sessionWh / 1000, 3));
+  setText('hero-cost', sessionPriced ? money(boot!.cost) : '—');
+  setText(
+    'compact-cost',
+    sessionPriced
+      ? money(boot!.cost)
+      : settings.tariff === null
+        ? t('Tarife bul', 'Find tariff')
+        : '—',
+  );
+  setText(
+    'daily-summary',
+    `${t('Bugün', 'Today')} · ${fmt((day.estimatedWh + day.measuredWh) / 1000, 3)} kWh · ${priced ? money(day.cost) : '—'}${unpriced > 0.1 ? ' · ' + fmt(unpriced / 1000, 3) + ' kWh ' + t('fiyatlandırılmadı', 'unpriced') : ''}`,
+  );
+  paintUsage('codex', snapshot.usage?.codex);
+  paintUsage('claude', snapshot.usage?.claude);
+  root
+    .querySelector('.energy-bridge')
+    ?.classList.toggle('paused', !p.available || p.watts === null);
   const electrical = p.source === 'meter' && p.available ? p.electrical : undefined;
   const protectionNames: Record<string, string> = {
     overtemp: t('Yüksek sıcaklık', 'Overtemperature'),
@@ -444,7 +602,7 @@ function paint() {
   );
   setText(
     'tracked',
-    `${t('Takip', 'Tracked')} ${fmt(day.trackedSeconds / 3600, 2)} ${t('sa', 'h')}${settings.electricity.source === 'epdk' ? ' · ' + t('Standart tarife tahmini', 'Standard tariff estimate') : ''}${unpriced > 0.1 ? ` · ${fmt(unpriced / 1000, 3)} kWh ${t('fiyatlandırılmadı', 'unpriced')}` : ''}`,
+    `${t('Oturumda takip', 'Tracked this session')} ${fmt((boot?.trackedSeconds ?? 0) / 3600, 2)} ${t('sa', 'h')} · ${t('Yalnızca aktif ve okunabilen süre', 'Only active time with readings')}${settings.electricity.source === 'epdk' ? ' · ' + t('Standart tarife tahmini', 'Standard tariff estimate') : ''}${sessionUnpriced > 0.1 ? ' · ' + fmt(sessionUnpriced / 1000, 3) + ' kWh ' + t('fiyatlandırılmadı', 'unpriced') : ''}`,
   );
   const status = {
     online: t('Hedef erişilebilir', 'Target reachable'),
@@ -515,6 +673,72 @@ function paint() {
   }
   paintUpdate();
 }
+function paintUsage(id: 'codex' | 'claude', usage: UsageSample | undefined) {
+  const status = usage?.status ?? 'unavailable';
+  setText(
+    id + '-status',
+    status === 'ready'
+      ? id === 'claude'
+        ? 'CLAUDE CODE'
+        : t('GÜNCEL', 'CURRENT')
+      : status === 'checking'
+        ? t('OKUNUYOR', 'CHECKING')
+        : status === 'stale'
+          ? t('ESKİ VERİ', 'STALE')
+          : t('VERİ YOK', 'NO DATA'),
+  );
+  for (const key of ['fiveHour', 'weekly'] as const) {
+    const w = usage?.[key];
+    setText(`${id}-${key}`, w ? fmt(w.usedPercent, 0) + '%' : '—');
+    const bar = root.querySelector<HTMLElement>(`[data-usage="${id}-${key}"]`);
+    if (bar) {
+      bar.classList.toggle('stale', status === 'stale');
+      bar.classList.toggle('warning', (w?.usedPercent ?? 0) >= 85);
+      if (w) bar.setAttribute('aria-valuenow', String(w.usedPercent));
+      else bar.removeAttribute('aria-valuenow');
+      bar.setAttribute(
+        'aria-valuetext',
+        w
+          ? fmt(w.usedPercent, 0) + '% ' + t('kullanıldı', 'used')
+          : t('Veri alınamadı', 'Unavailable'),
+      );
+      const fill = bar.querySelector<HTMLElement>('i');
+      if (fill) fill.style.width = (w?.usedPercent ?? 0) + '%';
+    }
+    const remaining = w ? Math.ceil((w.resetsAt - Date.now()) / 60000) : 0;
+    setText(
+      `${id}-${key}-reset`,
+      !w
+        ? t('Bu pencere bildirilmedi', 'Window not reported')
+        : remaining <= 0
+          ? t(
+              'Yenilenme zamanı geçti · yeni veri bekleniyor',
+              'Reset passed · waiting for fresh data',
+            )
+          : t('Yenilenme: ', 'Resets: ') +
+            new Date(w.resetsAt).toLocaleString(settings.language, {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+    );
+  }
+  setText(
+    id + '-checked',
+    usage?.checkedAt
+      ? `${id === 'codex' ? t('Resmî Codex arayüzü · 60 sn yenileme', 'Official Codex interface · 60s polling') : t('Claude Code durum bildirimi', 'Claude Code status report')} · ${t('Son veri', 'Last report')} ${new Date(usage.checkedAt).toLocaleTimeString(settings.language)}${status === 'stale' ? ' · ' + t('Güncelliği doğrulanmadı', 'Freshness not verified') : ''}`
+      : id === 'claude'
+        ? t(
+            'Claude Code bağlantısı ve oturum açmış, çalışan Claude Code gerekir. Web/masaüstü kullanımını resmî sayfadan kontrol edebilirsin.',
+            'Requires the bridge and running signed-in Claude Code. Check web/desktop usage on the official page.',
+          )
+        : t(
+            'Codex CLI’de ChatGPT hesabınla oturum aç. API anahtarı kullanımında bu plan limitleri bulunmayabilir.',
+            'Sign in to Codex CLI with ChatGPT. These plan windows may not exist for API-key usage.',
+          ),
+  );
+}
 function paintUpdate() {
   const label = root.querySelector<HTMLElement>('[data-update-status]');
   const btn = root.querySelector<HTMLElement>('[data-update-button]');
@@ -545,11 +769,47 @@ async function switchView(next: View) {
   await api?.setView(next);
 }
 function insertPersonalization() {
+  const appearance = root.querySelector('[name="language"]')?.closest('section');
+  appearance?.insertAdjacentHTML(
+    'afterbegin',
+    `<div class="mode-onboarding"><h2>${t('Cortexia’yı nasıl kullanmak istersin?', 'How would you like to use Cortexia?')}</h2><p>${t('Görünümünü seç. Daha sonra bu bölümden değiştirebilirsin.', 'Choose your surface. You can change it here anytime.')}</p><div class="presentation-options">${(
+      ['island', 'taskbar', 'app', 'both'] as const
+    )
+      .map((mode) => {
+        const names = {
+          island: t('Dinamik ada', 'Dynamic island'),
+          taskbar:
+            info.platform === 'win32'
+              ? t('Yalnızca Windows bar', 'Windows bar only')
+              : t('Yalnızca menü bar', 'Menu bar only'),
+          app: t('Uygulama', 'Application'),
+          both: t('Ada + bar', 'Island + bar'),
+        };
+        const descriptions = {
+          island: t('Ekran kenarında küçük, hareketli ada', 'A small island at the screen edge'),
+          taskbar: t(
+            'Diğer pencereler kapalı · ayarlar sağ tıkla',
+            'Other surfaces hidden · settings by right-click',
+          ),
+          app: t('Normal pencere ve görev çubuğu ikonu', 'A normal window and taskbar icon'),
+          both: t('Ada ve canlı bar birlikte açık', 'Island and live bar together'),
+        };
+        return `<label><input type="radio" name="presentation" value="${mode}" ${settings.presentation === mode ? 'checked' : ''}><span><strong>${names[mode]}</strong><small>${descriptions[mode]}</small></span></label>`;
+      })
+      .join(
+        '',
+      )}</div><p class="microcopy">${t('Uygulama penceresine geçişte pencere biçimi yeniden başlatılarak uygulanır; verilerin korunur.', 'Switching native window frames restarts the app and preserves your data.')}</p></div>`,
+  );
+  const widgets = root.querySelector('#widget-list');
+  widgets?.insertAdjacentHTML(
+    'beforeend',
+    `<div class="provider-setup"><h3>${t('Canlı hesap verisi', 'Live account data')}</h3><p class="microcopy">${t('Codex: oturum açmış yerel Codex CLI’den 60 saniyede bir ve bildirim geldiğinde. Claude: resmî Claude Code durum satırından; aktif kullanımdaki bildirimler anında, durum satırı 15 saniyede bir alınır. Claude web/masaüstüne ait yeni kullanım ancak Claude Code bunu bildirdiğinde çubuğa yansır.', 'Codex: signed-in local CLI, every 60 seconds and on notifications. Claude: documented Claude Code status line; usage reports are immediate, status-line input is received every 15 seconds. New web/desktop use appears when Claude Code reports it.')}</p><div class="maintenance-buttons"><button type="button" data-action="claude-connect">${t('Claude Code’u bağla', 'Connect Claude Code')}</button><button type="button" data-action="claude-disconnect">${t('Bağlantıyı kaldır', 'Remove bridge')}</button><button type="button" data-action="usage-refresh">${t('Limitleri yenile', 'Refresh limits')}</button></div></div>`,
+  );
   root
     .querySelector('.check-options')
     ?.insertAdjacentHTML(
       'beforebegin',
-      `<div class="form-grid"><label>${t('Küçültülmüş görünüm', 'Collapsed appearance')}<select name="compactMode">${(['auto', 'metrics', 'droplet'] as const).map((mode) => `<option value="${mode}" ${mode === settings.compactMode ? 'selected' : ''}>${mode === 'auto' ? t('Otomatik · Mac damla / Windows veri', 'Automatic · Mac droplet / Windows metrics') : mode === 'droplet' ? t('Damla', 'Droplet') : t('Ortalanmış veriler', 'Centered metrics')}</option>`).join('')}</select></label></div>${info.platform === 'win32' ? `<section class="taskbar-settings"><h2>${t('GÖREV ÇUBUĞU · CANLI GÖSTERGE', 'TASKBAR · LIVE INDICATOR')}</h2><label class="clickthrough-option"><input type="checkbox" name="taskbarEnabled" ${settings.taskbar.enabled ? 'checked' : ''}>${t('Sol alt görev çubuğunda göster', 'Show in the lower left taskbar area')}</label><p class="microcopy">${t('Bir veya iki veri seç. Cortexia bağımsız bir gösterge açar; Windows hava durumu düğmesini değiştirmez. Gizlenebilir. Otomatik gizlenen görev çubuğunda görünmez.', 'Select one or two metrics. Cortexia opens an independent indicator; it does not replace the Windows weather button. You can hide it. It stays hidden with an auto-hiding taskbar.')}</p><div class="taskbar-options">${(Object.keys(taskbarLabels) as TaskbarMetric[]).map((metric) => `<label><input type="checkbox" name="taskbarMetric" value="${metric}" ${settings.taskbar.metrics.includes(metric) ? 'checked' : ''}>${t(...taskbarLabels[metric])}</label>`).join('')}</div></section>` : ''}`,
+      `<div class="form-grid"><label>${t('Küçültülmüş görünüm', 'Collapsed appearance')}<select name="compactMode">${(['auto', 'metrics', 'droplet'] as const).map((mode) => `<option value="${mode}" ${mode === settings.compactMode ? 'selected' : ''}>${mode === 'auto' ? t('Otomatik · Mac damla / Windows veri', 'Automatic · Mac droplet / Windows metrics') : mode === 'droplet' ? t('Damla', 'Droplet') : t('Ortalanmış veriler', 'Centered metrics')}</option>`).join('')}</select></label></div>${`<section class="taskbar-settings"><h2>${info.platform === 'darwin' ? t('MENÜ ÇUBUĞU · CANLI GÖSTERGE', 'MENU BAR · LIVE INDICATOR') : t('GÖREV ÇUBUĞU · CANLI GÖSTERGE', 'TASKBAR · LIVE INDICATOR')}</h2><label class="clickthrough-option"><input type="checkbox" name="taskbarEnabled" ${settings.taskbar.enabled ? 'checked' : ''}>${info.platform === 'darwin' ? t('Menü çubuğunda göster', 'Show in the menu bar') : t('Sol alt görev çubuğunda göster', 'Show in the lower left taskbar area')}</label><p class="microcopy">${info.platform === 'darwin' ? t('Bir veya iki veri seç. Menü çubuğunda uygulama simgesinin yanında gösterilir.', 'Choose one or two readings beside the menu-bar icon.') : t('Bir veya iki veri seç. Cortexia bağımsız bir gösterge açar; Windows hava durumu düğmesini değiştirmez. Gizlenebilir. Otomatik gizlenen görev çubuğunda görünmez.', 'Select one or two metrics. Cortexia opens an independent indicator; it does not replace the Windows weather button. You can hide it. It stays hidden with an auto-hiding taskbar.')}</p><label class="clickthrough-option"><input type="checkbox" name="taskbarRotate" ${settings.taskbar.rotate ? 'checked' : ''}>${t('10 saniyelik döngü · elektrik → Codex → Claude', '10-second cycle · energy → Codex → Claude')}</label><p class="microcopy">${t('Her grupta iki veri görünür. Windows göstergesinin üzerine mouse ile gelince bekler; ayrılınca devam eder. Döngüyü kapatırsan aşağıdaki sabit veriler gösterilir.', 'Each group shows two readings. Hover the Windows indicator to pause; leave to resume. Disable the cycle to use the fixed metrics below.')}</p><div class="taskbar-options">${(Object.keys(taskbarLabels) as TaskbarMetric[]).map((metric) => `<label><input type="checkbox" name="taskbarMetric" value="${metric}" ${settings.taskbar.metrics.includes(metric) ? 'checked' : ''}>${t(...taskbarLabels[metric])}</label>`).join('')}</div></section>`}`,
     );
   root
     .querySelector('.check-options')
@@ -570,7 +830,16 @@ function insertPersonalization() {
   });
 }
 function feedback(message: string, bad = false) {
-  const el = root.querySelector<HTMLElement>('[data-feedback]');
+  let el = root.querySelector<HTMLElement>('[data-feedback]');
+  if (!el) {
+    root
+      .querySelector('.island')
+      ?.insertAdjacentHTML(
+        'beforeend',
+        '<p class="action-feedback" data-feedback role="status"></p>',
+      );
+    el = root.querySelector<HTMLElement>('[data-feedback]');
+  }
   if (el) {
     el.textContent = message;
     el.classList.toggle('bad', bad);
@@ -618,6 +887,7 @@ async function action(name: string) {
       return;
     }
     if (name === 'tariff') {
+      settingsTab = 'energy';
       await switchView('settings');
       const input = root.querySelector<HTMLSelectElement>('select[name="tariffCity"]');
       input?.closest('section')?.scrollIntoView({ block: 'start' });
@@ -625,8 +895,30 @@ async function action(name: string) {
       return;
     }
     if (name === 'expand') return switchView('expanded');
-    if (name === 'compact') return switchView('compact');
+    if (name === 'usage-refresh') return api?.refreshUsage();
+    if (name === 'codex-usage-page' || name === 'claude-usage-page')
+      return api?.openUsagePage(name.startsWith('codex') ? 'codex' : 'claude');
+    if (name === 'claude-connect') {
+      const connected = await api?.connectClaude();
+      feedback(
+        connected
+          ? t(
+              'Claude Code bağlantısı kuruldu. Claude Code açık ve oturum açmışken resmî kullanım verisi gelir.',
+              'Claude Code bridge installed. Usage arrives while signed in and running.',
+            )
+          : t('Bu bağlantıyı kurulu uygulamadan yapabilirsin.', 'Connect from the installed app.'),
+      );
+      return;
+    }
+    if (name === 'claude-disconnect') {
+      await api?.disconnectClaude();
+      feedback(t('Claude Code durum satırı geri yüklendi.', 'Claude Code status line restored.'));
+      return;
+    }
+    if (name === 'compact')
+      return settings.presentation === 'app' ? api?.minimize() : switchView('compact');
     if (name === 'settings' || name === 'widgets') {
+      settingsTab = name === 'widgets' ? 'widgets' : 'general';
       await switchView('settings');
       return;
     }
@@ -710,14 +1002,15 @@ function bindSettings() {
         onboardingComplete: true,
       },
       widgets: data.getAll('widget') as WidgetId[],
+      presentation: data.get('presentation') as Settings['presentation'],
+      presentationSetupComplete: true,
+      startupConfigured: true,
       compactMode: data.get('compactMode') as Settings['compactMode'],
-      taskbar:
-        info.platform === 'win32'
-          ? {
-              enabled: data.has('taskbarEnabled'),
-              metrics: data.getAll('taskbarMetric') as TaskbarMetric[],
-            }
-          : settings.taskbar,
+      taskbar: {
+        enabled: data.has('taskbarEnabled'),
+        metrics: data.getAll('taskbarMetric') as TaskbarMetric[],
+        rotate: data.has('taskbarRotate'),
+      },
       language: data.get('language') as Settings['language'],
       currency: settings.currency,
       powerMode: data.get('powerMode') as Settings['powerMode'],
@@ -776,8 +1069,24 @@ async function init() {
   if (window.islandTaskbar) {
     const taskApi = window.islandTaskbar;
     root.className = 'taskbar-root';
+    let barState: Awaited<ReturnType<TaskbarAPI['getState']>> | null = null;
+    let elapsed = 0,
+      lastTick = performance.now(),
+      paused = false;
+    let lastPhase = '';
+    root.addEventListener('pointerenter', () => {
+      paused = true;
+    });
+    root.addEventListener('pointerleave', () => {
+      paused = false;
+      lastTick = performance.now();
+    });
     const paintTaskbar = (state: Awaited<ReturnType<TaskbarAPI['getState']>>) => {
+      if (barState?.settings.taskbar.rotate !== state.settings.taskbar.rotate) elapsed = 0;
+      barState = state;
       settings = state.settings;
+      const visibleMetrics = barMetrics(settings.taskbar, elapsed);
+      lastPhase = visibleMetrics.join(',');
       const s = state.snapshot;
       const metric = (id: TaskbarMetric) => {
         if (!s) return '—';
@@ -788,14 +1097,61 @@ async function init() {
         if (id === 'energy') return fmt((s.today.estimatedWh + s.today.measuredWh) / 1000, 3);
         if (id === 'power') return s.power.available ? fmt(s.power.watts, 1) : '—';
         if (id === 'ping') return fmt(s.network.pingMs, 0);
+        if (id === 'sessionEnergy')
+          return s.boot ? fmt((s.boot.estimatedWh + s.boot.measuredWh) / 1000, 3) : '—';
+        if (id === 'sessionCost')
+          return s.boot && (s.boot.pricedWh > 0 || settings.tariff !== null)
+            ? money(s.boot.cost)
+            : '—';
+        if (id.startsWith('codex') || id.startsWith('claude')) {
+          const usage = id.startsWith('codex') ? s.usage?.codex : s.usage?.claude;
+          const w = id.endsWith('Week') ? usage?.weekly : usage?.fiveHour;
+          return w ? (usage?.status === 'stale' ? '~' : '') + fmt(w.usedPercent, 0) + '%' : '—';
+        }
         const bps = id === 'down' ? s.network.downBps : s.network.upBps;
         return fmt(bps === null ? null : (bps * 8) / 1e6, 1);
       };
-      root.innerHTML = `<button class="taskbar-indicator" aria-label="Cortexia Island · ${t('Aç', 'Open')}" title="${t('Cortexia Island · açıkken takip edilen tüketim ve standart tarife tahmini', 'Cortexia Island · tracked energy and standard tariff estimate')}"><img src="${brandMark}" alt=""><span class="taskbar-readings">${settings.taskbar.metrics.map((id) => `<span><strong data-taskbar="${id}">${e(metric(id))}</strong><small>${e(t(...taskbarLabels[id]))}</small></span>`).join('')}</span>${state.preview ? '<span class="taskbar-demo">DEMO</span>' : '<i class="taskbar-live"></i>'}</button>`;
-      root.querySelector('button')?.addEventListener('click', () => void taskApi.showIsland());
+      const uncertain = visibleMetrics.some((id) => {
+        if (!id.startsWith('codex') && !id.startsWith('claude')) return !s;
+        const u = id.startsWith('codex') ? s?.usage?.codex : s?.usage?.claude;
+        const w = id.endsWith('Week') ? u?.weekly : u?.fiveHour;
+        return !w || u?.status !== 'ready';
+      });
+      const barTitle =
+        'Cortexia Island · ' +
+        visibleMetrics.map((id) => t(...taskbarLabels[id]) + ': ' + metric(id)).join(' · ') +
+        (uncertain
+          ? ' · ' + t('Eksik veya güncelliği doğrulanmamış veri', 'Missing or unverified freshness')
+          : '');
+      const electricGroup =
+        visibleMetrics.some((id) => id === 'cost' || id === 'sessionCost') &&
+        visibleMetrics.some((id) => id === 'energy' || id === 'sessionEnergy');
+      root.classList.toggle('reduced-motion', settings.reducedMotion);
+      const layoutKey = lastPhase + ':' + settings.language + ':' + state.preview;
+      if (root.dataset.barLayout !== layoutKey) {
+        root.innerHTML = `<button class="taskbar-indicator" aria-label="Cortexia Island · ${t('Aç', 'Open')}" title="${e(barTitle)}"><img src="${brandMark}" alt=""><span class="taskbar-readings">${visibleMetrics.map((id) => `<span><strong data-taskbar="${id}">${e(metric(id))}</strong><small>${e(t(...taskbarLabels[id]))}</small></span>`).join(electricGroup ? `<b class="taskbar-electricity${s?.power.available ? '' : ' paused'}" aria-hidden="true">${icon('bolt')}</b>` : '')}</span>${state.preview ? '<span class="taskbar-demo">DEMO</span>' : `<i class="taskbar-live${uncertain ? ' uncertain' : ''}"></i>`}</button>`;
+        root.querySelector('button')?.addEventListener('click', () => void taskApi.showIsland());
+        root.dataset.barLayout = layoutKey;
+      } else {
+        root.querySelector<HTMLButtonElement>('button')!.title = barTitle;
+        root.querySelectorAll<HTMLElement>('[data-taskbar]').forEach((el) => {
+          el.textContent = metric(el.dataset.taskbar as TaskbarMetric);
+        });
+        root.querySelector('.taskbar-live')?.classList.toggle('uncertain', uncertain);
+        root.querySelector('.taskbar-electricity')?.classList.toggle('paused', !s?.power.available);
+      }
     };
     paintTaskbar(await taskApi.getState());
     taskApi.onState(paintTaskbar);
+    setInterval(() => {
+      const now = performance.now();
+      if (!paused && barState?.settings.taskbar.rotate) elapsed += now - lastTick;
+      lastTick = now;
+      root.dataset.cycleState = paused ? 'paused' : 'running';
+      root.dataset.cycleElapsed = String(Math.round(elapsed));
+      if (barState && barMetrics(barState.settings.taskbar, elapsed).join(',') !== lastPhase)
+        paintTaskbar(barState);
+    }, 250);
     return;
   }
   if (!api) {
@@ -812,12 +1168,18 @@ async function init() {
   ]);
   docked = initialLayout.docked;
   view = info.initialView;
+  if (view === 'settings')
+    settingsTab = !settings.presentationSetupComplete
+      ? 'general'
+      : !settings.electricity.onboardingComplete
+        ? 'energy'
+        : 'general';
   render();
-  if (view === 'settings' && !settings.electricity.onboardingComplete)
+  if (view === 'settings' && settingsTab === 'energy' && !settings.electricity.onboardingComplete)
     root.querySelector<HTMLSelectElement>('[name="tariffCity"]')?.focus();
   api.onLayout((next) => {
     docked = next.docked;
-    root.classList.toggle('edge-attached', docked);
+    root.classList.toggle('edge-attached', docked && settings.presentation !== 'app');
   });
   api.onSnapshot((sample) => {
     snapshot = sample;
@@ -840,9 +1202,14 @@ async function init() {
     if (view !== 'settings') render();
   });
   api.onOpenExpanded(() => void switchView('expanded'));
+  api.onNavigate((next, section) => {
+    showHistory = false;
+    if (next === 'settings') settingsTab = section ?? 'general';
+    void switchView(next);
+  });
   let passthrough = false;
   document.addEventListener('pointermove', (event) => {
-    if (resizingPointer) return;
+    if (resizingPointer || dropletPointer) return;
     const ignore = !(event.target instanceof Element && event.target.closest('.island'));
     if (ignore !== passthrough) {
       passthrough = ignore;
@@ -850,14 +1217,18 @@ async function init() {
     }
   });
   document.addEventListener('pointerleave', () => {
-    if (resizingPointer) return;
+    if (resizingPointer || dropletPointer) return;
     passthrough = true;
     void api.setPointerPassthrough(true);
   });
   if (info.backupRecovered)
     feedback(t('Veriler yerel yedekten kurtarıldı.', 'Data recovered from a local backup.'));
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') void switchView(view === 'settings' ? 'expanded' : 'compact');
+    if (event.key === 'Escape') {
+      if (view === 'settings') void switchView('expanded');
+      else if (settings.presentation === 'app') void api.minimize();
+      else void switchView('compact');
+    }
   });
 }
 void init();

@@ -1,6 +1,45 @@
 export type WidgetId =
-  'network' | 'power' | 'energy' | 'system' | 'battery' | 'clock' | 'health' | 'insights';
-export type TaskbarMetric = 'cost' | 'energy' | 'power' | 'down' | 'up' | 'ping';
+  | 'network'
+  | 'power'
+  | 'energy'
+  | 'system'
+  | 'battery'
+  | 'clock'
+  | 'health'
+  | 'insights'
+  | 'codex'
+  | 'claude';
+export type TaskbarMetric =
+  | 'cost'
+  | 'energy'
+  | 'power'
+  | 'down'
+  | 'up'
+  | 'ping'
+  | 'sessionEnergy'
+  | 'sessionCost'
+  | 'codex5h'
+  | 'codexWeek'
+  | 'claude5h'
+  | 'claudeWeek';
+export type Presentation = 'island' | 'taskbar' | 'app' | 'both';
+export interface BootEnergy extends Omit<DayEnergy, 'date'> {
+  startedAt: number;
+  firstTrackedAt: number;
+  sessionId?: string;
+}
+export interface UsageWindow {
+  usedPercent: number;
+  resetsAt: number;
+  windowMinutes: number;
+}
+export interface UsageSample {
+  status: 'checking' | 'ready' | 'unavailable' | 'stale';
+  checkedAt: number | null;
+  fiveHour: UsageWindow | null;
+  weekly: UsageWindow | null;
+  source: 'codex-app-server' | 'claude-statusline';
+}
 export type View = 'compact' | 'expanded' | 'settings';
 export interface ElectricityProfile {
   city: string;
@@ -29,8 +68,11 @@ export interface TariffQuote {
   documentUrl: string;
 }
 export interface Settings {
+  presentation: Presentation;
+  presentationSetupComplete: boolean;
+  startupConfigured: boolean;
   compactMode: 'auto' | 'metrics' | 'droplet';
-  taskbar: { enabled: boolean; metrics: TaskbarMetric[] };
+  taskbar: { enabled: boolean; metrics: TaskbarMetric[]; rotate: boolean };
   language: 'tr' | 'en';
   widgets: WidgetId[];
   tariff: number | null;
@@ -65,6 +107,7 @@ export interface StoreData {
   schemaVersion: 1;
   settings: Settings;
   days: DayEnergy[];
+  boot?: BootEnergy;
 }
 export interface NetworkSample {
   downBps: number | null;
@@ -91,6 +134,8 @@ export interface PowerSample {
   available: boolean;
 }
 export interface Snapshot {
+  boot?: BootEnergy;
+  usage?: { codex: UsageSample; claude: UsageSample };
   time: number;
   cpu: number;
   memoryPercent: number;
@@ -117,6 +162,12 @@ export interface AppInfo {
   preview: boolean;
 }
 export interface IslandAPI {
+  openUsagePage(provider: 'codex' | 'claude'): Promise<void>;
+  onNavigate(callback: (view: View, section?: 'maintenance') => void): () => void;
+  refreshUsage(): Promise<void>;
+  connectClaude(): Promise<boolean>;
+  disconnectClaude(): Promise<boolean>;
+  minimize(): Promise<void>;
   onOpenExpanded(callback: () => void): () => void;
   findTariff(request: TariffRequest): Promise<{ settings: Settings; quote: TariffQuote }>;
   getSettings(): Promise<Settings>;

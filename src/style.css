@@ -1,4 +1,254 @@
 @import url('./tokens.css');
+.settings-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: #0b0d10;
+  border: 1px solid #ffffff12;
+  border-radius: 14px;
+  margin-bottom: 22px;
+}
+.settings-nav button {
+  flex: 1;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #a8aeb8;
+  padding: 9px 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.settings-nav button[aria-pressed='true'] {
+  background: #23211c;
+  color: #eee1c5;
+  box-shadow: inset 0 1px #ffffff0c;
+}
+[data-settings-tab][hidden] {
+  display: none !important;
+}
+.mode-onboarding {
+  padding-bottom: 24px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #ffffff12;
+}
+.mode-onboarding h2 {
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  line-height: 1.7;
+  color: #e5ddce;
+}
+.mode-onboarding p {
+  color: #a7aeb8;
+  line-height: 1.6;
+}
+.presentation-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 18px 0;
+}
+.presentation-options label {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 14px;
+  border: 1px solid #ffffff14;
+  border-radius: 16px;
+  background: #ffffff03;
+  cursor: pointer;
+}
+.presentation-options label:has(input:checked) {
+  border-color: #b7a17488;
+  background: linear-gradient(135deg, #b39b6120, transparent);
+}
+.presentation-options input {
+  margin-top: 3px;
+  accent-color: #d3ba8c;
+}
+.presentation-options span {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.presentation-options strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e5e1d8;
+}
+.presentation-options small {
+  font-size: 10px;
+  color: #a7adb5;
+  line-height: 1.5;
+}
+.advanced-energy summary {
+  padding: 14px;
+  border: 1px solid #ffffff14;
+  border-radius: 12px;
+  color: #d1c5ad;
+  cursor: pointer;
+}
+.advanced-energy[open] summary {
+  margin-bottom: 18px;
+}
+.provider-setup {
+  padding: 16px;
+  margin-top: 18px;
+  background: #ffffff03;
+  border: 1px solid #ffffff12;
+  border-radius: 16px;
+}
+.provider-setup h3 {
+  font-size: 13px;
+  font-weight: 500;
+  color: #d8cdb6;
+}
+.daily-summary {
+  padding: 12px 0 0;
+  margin-top: 12px;
+  border-top: 1px solid #ffffff10;
+  color: #aab0ba;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.energy-bridge {
+  width: 70px;
+  height: 12px;
+  flex: 0 0 12px;
+  position: relative;
+  align-self: center;
+  margin: -8px 0;
+  color: #cdbf9a;
+  opacity: 0.6;
+}
+.energy-bridge > span {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 6px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #c6b68f55, transparent);
+}
+.energy-bridge .icon {
+  position: absolute;
+  left: 30px;
+  top: 1px;
+  width: 10px;
+  height: 10px;
+  stroke-width: 1.2;
+  animation: current-glint 4.8s ease-in-out infinite;
+}
+@keyframes current-glint {
+  0%,
+  100% {
+    opacity: 0.3;
+    filter: none;
+  }
+  45% {
+    opacity: 0.8;
+    filter: drop-shadow(0 0 2px #e8d4a657);
+  }
+  65% {
+    opacity: 0.45;
+    filter: none;
+  }
+}
+.reduced-motion .energy-bridge .icon,
+.energy-bridge.paused .icon {
+  animation: none;
+  opacity: 0.4;
+}
+@media (prefers-reduced-motion: reduce) {
+  .energy-bridge .icon {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+.usage-card {
+  padding: 18px;
+  border: 1px solid #ffffff15;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #ffffff05, transparent 70%), #060708;
+}
+.usage-row {
+  margin-top: 18px;
+}
+.usage-row > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.usage-row span {
+  color: #aeb5bf;
+  font-size: 11px;
+}
+.usage-row strong {
+  color: #dce2df;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.usage-track {
+  height: 4px;
+  border-radius: 4px;
+  background: #ffffff0d;
+  overflow: hidden;
+}
+.usage-track i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #526e65, #a6c3b0);
+  transition: width 0.5s ease;
+}
+.claude .usage-track i {
+  background: linear-gradient(90deg, #75644b, #d0b791);
+}
+.usage-track.warning i {
+  background: #d9a081;
+}
+.usage-track.stale {
+  opacity: 0.45;
+}
+.usage-row > small {
+  display: block;
+  margin-top: 8px;
+  color: #89929e;
+  font-size: 10px;
+}
+.usage-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.usage-actions button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #c0b294;
+  font-size: 10px;
+}
+.reduced-motion .usage-track i {
+  transition: none;
+}
+#app.application-mode {
+  padding: 18px;
+  background: #000;
+}
+.application-mode .island {
+  max-width: 940px;
+  margin: auto;
+  border-radius: 22px;
+}
+.application-mode .notch-shoulder {
+  display: none;
+}
 .automatic-price {
   display: flex;
   flex-direction: column;
@@ -1591,5 +1841,62 @@ footer {
   }
   .compact .compact-readout {
     gap: 12px;
+  }
+}
+.taskbar-live.uncertain {
+  background: #92979f;
+  box-shadow: none;
+}
+.action-feedback {
+  padding: 10px 18px;
+  color: #b8d2c3;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.action-feedback.bad {
+  color: #e6ad95;
+}
+.settings-save {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid #ffffff12;
+  background: #030405;
+}
+.settings-save .primary-button {
+  width: auto;
+  margin: 0;
+  padding: 11px 18px;
+}
+.settings-save .form-feedback {
+  flex: 1;
+  margin: 0;
+}
+.taskbar-electricity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  flex: 0 0 12px;
+  font-weight: normal;
+  color: #cfbf99;
+}
+.taskbar-electricity .icon {
+  width: 11px;
+  height: 11px;
+  stroke-width: 1.4;
+  animation: current-glint 4.8s ease-in-out infinite;
+}
+.reduced-motion .taskbar-electricity .icon,
+.taskbar-electricity.paused .icon {
+  animation: none;
+  opacity: 0.4;
+}
+@media (prefers-reduced-motion: reduce) {
+  .taskbar-electricity .icon {
+    animation: none;
   }
 }

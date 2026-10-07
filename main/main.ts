@@ -17,6 +17,9 @@ import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import { DataStore } from './store';
 import { Telemetry } from './telemetry';
+import { installClaudeBridge, removeClaudeBridge } from './claude-bridge';
+import { emptyUsage } from './usage';
+import { barMetrics } from '../shared/bar';
 import { findOnlineTariff, validateTariffRequest } from './tariff';
 import {
   DEFAULT_SETTINGS,
@@ -28,6 +31,7 @@ import {
 } from './core';
 import type { Snapshot, View, UpdateStatus } from '../shared/types';
 const smoke = process.argv.includes('--smoke');
+const smokeApp = smoke && process.argv.includes('--app-mode');
 const captureLive = process.argv.includes('--capture-live');
 if (smoke) app.setPath('userData', path.join(process.cwd(), '.artifacts', 'smoke-profile'));
 const lock = app.requestSingleInstanceLock();
@@ -43,6 +47,9 @@ if (!lock) {
   let store: DataStore;
   let telemetry: Telemetry;
   let view: View = smoke ? 'expanded' : 'compact';
+  let nativeAppMode = false;
+  let quitting = false;
+  let contextMenuCount = 0;
   let update: UpdateStatus = { phase: 'idle' };
   let expectedPosition = { x: 0, y: 0 };
   let moveTimer: NodeJS.Timeout | undefined;
@@ -75,14 +82,19 @@ if (!lock) {
       store.data.settings.displayId ?? screen.getPrimaryDisplay().id,
     );
     const area = display.workArea;
-    const width = Math.min(size?.width ?? (view === 'compact' ? 440 : 560), area.width);
-    const height = Math.min(size?.height ?? heights[view], area.height);
+    const width = Math.min(
+      nativeAppMode ? 760 : (size?.width ?? (view === 'compact' ? 440 : 560)),
+      area.width,
+    );
+    const height = Math.min(nativeAppMode ? 760 : (size?.height ?? heights[view]), area.height);
     const x = saved
       ? Math.max(area.x, Math.min(saved.x, area.x + area.width - width))
       : Math.round(area.x + (area.width - width) / 2);
     const y = saved
       ? Math.max(area.y, Math.min(saved.y, area.y + area.height - height))
-      : area.y + Math.min(store.data.settings.topOffset, Math.max(0, area.height - height));
+      : nativeAppMode
+        ? Math.round(area.y + (area.height - height) / 2)
+        : area.y + Math.min(store.data.settings.topOffset, Math.max(0, area.height - height));
     expectedPosition = { x, y };
     win.setBounds({ x, y, width, height });
     emitLayout({ x, y, width, height });
@@ -104,14 +116,15 @@ if (!lock) {
   }
   function emitSettings() {
     win.webContents.send('settings:changed', store.data.settings);
+    if (tray) tray.setContextMenu(Menu.buildFromTemplate(applicationMenu()));
     publishTaskbar();
   }
   function applySettings() {
-    win.setAlwaysOnTop(store.data.settings.alwaysOnTop, 'floating');
-    win.setOpacity(store.data.settings.opacity);
-    win.setIgnoreMouseEvents(store.data.settings.clickThrough, { forward: true });
+    win.setAlwaysOnTop(!nativeAppMode && store.data.settings.alwaysOnTop, 'floating');
+    win.setOpacity(nativeAppMode ? 1 : store.data.settings.opacity);
+    win.setIgnoreMouseEvents(!nativeAppMode && store.data.settings.clickThrough, { forward: true });
     if (app.isPackaged && !smoke)
-      app.setLoginItemSettings({ openAtLogin: store.data.settings.launchAtLogin });
+      app.setLoginItemSettings({ openAtLogin: store.data.settings.launchAtLogin, args: [] });
     position();
     positionTaskbar();
   }
@@ -130,15 +143,49 @@ if (!lock) {
       tray.setToolTip(
         `Cortexia Island · ${((s.today.estimatedWh + s.today.measuredWh) / 1000).toFixed(3)} kWh · ${store.data.settings.tariff === null ? 'Tarife kurulumu' : new Intl.NumberFormat(store.data.settings.language, { style: 'currency', currency: store.data.settings.currency }).format(s.today.cost)} · ${s.power.watts?.toFixed(1) ?? '—'} W`,
       );
-      if (process.platform === 'darwin')
+      if (process.platform === 'darwin') {
+        const settings = store.data.settings;
+        const number = (n: number, digits = 1) =>
+          new Intl.NumberFormat(settings.language, { maximumFractionDigits: digits }).format(n);
+        const price = (n: number) =>
+          new Intl.NumberFormat(settings.language, {
+            style: 'currency',
+            currency: settings.currency,
+          }).format(n);
+        const value = (id: (typeof settings.taskbar.metrics)[number]) => {
+          if (id === 'energy')
+            return number((s.today.estimatedWh + s.today.measuredWh) / 1000, 3) + ' kWh';
+          if (id === 'cost')
+            return settings.tariff === null && s.today.pricedWh === 0 ? '—' : price(s.today.cost);
+          if (id === 'sessionEnergy')
+            return s.boot
+              ? number((s.boot.estimatedWh + s.boot.measuredWh) / 1000, 3) + ' kWh'
+              : '—';
+          if (id === 'sessionCost')
+            return s.boot && (s.boot.pricedWh > 0 || settings.tariff !== null)
+              ? price(s.boot.cost)
+              : '—';
+          if (id === 'power')
+            return s.power.available && s.power.watts !== null ? number(s.power.watts) + ' W' : '—';
+          if (id === 'ping')
+            return s.network.pingMs !== null ? number(s.network.pingMs, 0) + ' ms' : '—';
+          if (id === 'down' || id === 'up') {
+            const n = id === 'down' ? s.network.downBps : s.network.upBps;
+            return n === null ? '—' : number((n * 8) / 1e6) + ' Mbps';
+          }
+          const usage = id.startsWith('codex') ? s.usage?.codex : s.usage?.claude;
+          const w = id.endsWith('Week') ? usage?.weekly : usage?.fiveHour;
+          return (
+            (id.startsWith('codex') ? 'CX ' : 'CL ') +
+            (w ? (usage?.status === 'stale' ? '~' : '') + number(w.usedPercent, 0) + '%' : '—')
+          );
+        };
         tray.setTitle(
-          store.data.settings.tariff === null
-            ? '—'
-            : new Intl.NumberFormat(store.data.settings.language, {
-                style: 'currency',
-                currency: store.data.settings.currency,
-              }).format(s.today.cost),
+          settings.taskbar.enabled && ['taskbar', 'both'].includes(settings.presentation)
+            ? barMetrics(settings.taskbar, performance.now()).map(value).join(' · ')
+            : '',
         );
+      }
     }
   }
   function positionTaskbar() {
@@ -151,6 +198,7 @@ if (!lock) {
       !taskbarAlignmentSupported ||
       display.bounds.width < 1024 ||
       !store.data.settings.taskbar.enabled ||
+      !['taskbar', 'both'].includes(store.data.settings.presentation) ||
       gap < 28 ||
       gap > 120
     ) {
@@ -198,12 +246,14 @@ if (!lock) {
       hasShadow: false,
       webPreferences: {
         preload: path.join(__dirname, 'taskbar-preload.js'),
+        backgroundThrottling: false,
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
       },
     });
     taskbarWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    attachContextMenu(taskbarWin.webContents);
     taskbarWin.webContents.on('will-navigate', (event) => event.preventDefault());
     const auth = (event: Electron.IpcMainInvokeEvent) => {
       if (
@@ -218,9 +268,7 @@ if (!lock) {
     });
     ipcMain.handle('taskbar:show', (event) => {
       auth(event);
-      view = 'expanded';
-      win.webContents.send('window:open-expanded');
-      reveal();
+      navigate(store.data.settings.presentation === 'taskbar' ? 'settings' : 'expanded');
     });
     if (process.env.ISLAND_DEV_URL && !app.isPackaged)
       await taskbarWin.loadURL(process.env.ISLAND_DEV_URL + '#taskbar');
@@ -240,6 +288,86 @@ if (!lock) {
       win.show();
       win.focus();
     }
+  }
+  function navigate(next: View, section?: 'maintenance') {
+    view = next;
+    win.webContents.send('window:navigate', next, section);
+    reveal();
+  }
+  function applicationMenu(): Electron.MenuItemConstructorOptions[] {
+    const t = (tr: string, en: string) => (store.data.settings.language === 'en' ? en : tr);
+    return [
+      { label: 'Cortexia Island', enabled: false },
+      { label: t('Ayarlar', 'Settings'), click: () => navigate('settings') },
+      {
+        label:
+          store.data.settings.presentation === 'taskbar'
+            ? t('Ayarları aç', 'Open Settings')
+            : t('Adayı / uygulamayı aç', 'Open island / application'),
+        click: () =>
+          navigate(store.data.settings.presentation === 'taskbar' ? 'settings' : 'expanded'),
+      },
+      { label: t('Gizle', 'Hide'), click: () => win.hide() },
+      {
+        label: t('Üst ortaya geri getir', 'Reset to top center'),
+        click: () => {
+          store.data.settings.position = null;
+          store.data.settings.displayId = null;
+          store.save();
+          position();
+          reveal();
+        },
+      },
+      { type: 'separator' },
+      {
+        label: t('Kullanım biçimi', 'Usage mode'),
+        submenu: (['island', 'taskbar', 'app', 'both'] as const).map((mode) => ({
+          label: {
+            island: t('Dinamik ada', 'Dynamic island'),
+            taskbar:
+              process.platform === 'win32'
+                ? t('Windows bar · yalnızca', 'Windows bar only')
+                : t('Menü bar · yalnızca', 'Menu bar only'),
+            app: t('Uygulama penceresi', 'Application window'),
+            both: t('Ada + bar', 'Island + bar'),
+          }[mode],
+          type: 'radio',
+          checked: store.data.settings.presentation === mode,
+          click: () => {
+            void win.webContents
+              .executeJavaScript(
+                `window.island.getSettings().then(s=>window.island.saveSettings({...s,presentation:${JSON.stringify(mode)},presentationSetupComplete:true}))`,
+              )
+              .catch(() => navigate('settings'));
+          },
+        })),
+      },
+      {
+        label: t('Güncelleme ara', 'Check updates'),
+        click: () => {
+          navigate('settings', 'maintenance');
+          void win.webContents.executeJavaScript('window.island.checkUpdate()').catch(() => {});
+        },
+      },
+      { type: 'separator' },
+      { label: t('Çıkış', 'Exit'), click: () => app.quit() },
+    ];
+  }
+  function attachContextMenu(contents: Electron.WebContents) {
+    contents.on('context-menu', (_event, params) => {
+      contextMenuCount++;
+      const edit: Electron.MenuItemConstructorOptions[] = params.isEditable
+        ? [{ role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { type: 'separator' }]
+        : params.selectionText
+          ? [{ role: 'copy' }, { type: 'separator' }]
+          : [];
+      const menu = Menu.buildFromTemplate([...edit, ...applicationMenu()]);
+      menu.popup({
+        window: BrowserWindow.fromWebContents(contents) ?? win,
+      });
+      if (smoke)
+        setTimeout(() => menu.closePopup(BrowserWindow.fromWebContents(contents) ?? win), 120);
+    });
   }
   function fixture(): Snapshot {
     const today = {
@@ -265,6 +393,23 @@ if (!lock) {
         probe: '1.1.1.1',
       },
       power: { watts: 124.8, source: 'estimate', available: true },
+      boot: { ...today, startedAt: Date.now() - 18000000, firstTrackedAt: Date.now() - 14400000 },
+      usage: {
+        codex: {
+          ...emptyUsage('codex-app-server'),
+          status: 'ready',
+          checkedAt: Date.now(),
+          fiveHour: { usedPercent: 34, resetsAt: Date.now() + 3600000, windowMinutes: 300 },
+          weekly: { usedPercent: 36, resetsAt: Date.now() + 3 * 86400000, windowMinutes: 10080 },
+        },
+        claude: {
+          ...emptyUsage('claude-statusline'),
+          status: 'ready',
+          checkedAt: Date.now(),
+          fiveHour: { usedPercent: 23.5, resetsAt: Date.now() + 7200000, windowMinutes: 300 },
+          weekly: { usedPercent: 41.2, resetsAt: Date.now() + 4 * 86400000, windowMinutes: 10080 },
+        },
+      },
       today,
       history: [{ ...today, date: localDate(Date.now() - 86400000), estimatedWh: 610 }, today],
       battery: { hasBattery: false, percent: null, charging: false },
@@ -285,6 +430,15 @@ if (!lock) {
   }
   async function createWindow() {
     store = new DataStore(app.getPath('userData'));
+    nativeAppMode = store.data.settings.presentation === 'app';
+    if (!smoke && !store.data.settings.startupConfigured) {
+      store.data.settings.launchAtLogin = true;
+      store.data.settings.startupConfigured = true;
+      if (store.data.settings.widgets.join(',') === 'energy,power,network')
+        store.data.settings.widgets.push('codex', 'claude');
+    }
+    if (!smoke && nativeAppMode) view = 'expanded';
+    if (!smoke && !store.data.settings.presentationSetupComplete) view = 'settings';
     if (
       !smoke &&
       store.data.settings.tariff === null &&
@@ -300,21 +454,31 @@ if (!lock) {
     if (smoke)
       store.data = {
         schemaVersion: 1,
-        settings: { ...structuredClone(DEFAULT_SETTINGS), compactMode: 'metrics', tariff: 3.4 },
+        settings: {
+          ...structuredClone(DEFAULT_SETTINGS),
+          widgets: ['energy', 'power', 'network'],
+          presentationSetupComplete: true,
+          startupConfigured: true,
+          compactMode: 'metrics',
+          taskbar: { ...DEFAULT_SETTINGS.taskbar, rotate: false },
+          presentation: smokeApp ? 'app' : 'both',
+          tariff: 3.4,
+        },
         days: [],
       };
+    nativeAppMode = store.data.settings.presentation === 'app';
     store.backup();
     store.save();
     win = new BrowserWindow({
       width: 560,
       height: heights[view],
       show: false,
-      frame: false,
-      transparent: true,
-      backgroundColor: '#00000000',
-      resizable: false,
-      maximizable: false,
-      fullscreenable: false,
+      frame: nativeAppMode,
+      transparent: !nativeAppMode,
+      backgroundColor: nativeAppMode ? '#000000' : '#00000000',
+      resizable: nativeAppMode,
+      maximizable: nativeAppMode,
+      fullscreenable: nativeAppMode,
       hasShadow: false,
       skipTaskbar: false,
       title: 'Cortexia Island',
@@ -329,6 +493,7 @@ if (!lock) {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event) => event.preventDefault());
+    attachContextMenu(win.webContents);
     register('settings:get', () => store.data.settings);
     let tariffBusy = false;
     register('tariff:find', async (input: unknown) => {
@@ -367,6 +532,9 @@ if (!lock) {
     });
     register('settings:save', (input: unknown) => {
       const settings = validateSettings(input);
+      const oldPresentation = store.data.settings.presentation;
+      if (settings.presentation === 'taskbar') settings.taskbar.enabled = true;
+      const restartFrame = (settings.presentation === 'app') !== nativeAppMode;
       if (
         settings.tariff !== store.data.settings.tariff ||
         settings.currency !== store.data.settings.currency ||
@@ -395,6 +563,21 @@ if (!lock) {
       telemetry.resetInterval();
       applySettings();
       emitSettings();
+      if (!smoke && restartFrame) {
+        setTimeout(() => {
+          app.relaunch({
+            args: process.argv
+              .slice(1)
+              .filter((arg) => arg !== '--capture-live' && arg !== '--dock'),
+          });
+          app.quit();
+        }, 250);
+      } else if (settings.presentation === 'taskbar' && settings.presentationSetupComplete)
+        win.hide();
+      else if (oldPresentation === 'taskbar' && settings.presentation !== 'taskbar') {
+        if (smoke) win.showInactive();
+        else win.show();
+      }
       return settings;
     });
     register('telemetry:get', () => (smoke ? fixture() : telemetry.last));
@@ -406,17 +589,52 @@ if (!lock) {
       packaged: app.isPackaged,
       backupRecovered: store.recovered,
       preview: smoke,
-      displays: screen
-        .getAllDisplays()
-        .map((d, i) => ({ id: d.id, label: d.label || `Display ${i + 1}` })),
+      displays: screen.getAllDisplays().map((d, i) => ({
+        id: d.id,
+        label: smoke ? `Demo display ${i + 1}` : d.label || `Display ${i + 1}`,
+      })),
     }));
     register('window:view', (input: unknown) => {
       if (!['compact', 'expanded', 'settings'].includes(String(input)))
         throw new Error('Invalid view');
       view = input as View;
+      if (
+        view === 'expanded' &&
+        store.data.settings.presentation === 'taskbar' &&
+        store.data.settings.presentationSetupComplete
+      ) {
+        win.hide();
+        return;
+      }
       position();
     });
     register('window:hide', () => win.hide());
+    register('window:minimize', () => win.minimize());
+    register('usage:refresh', () => {
+      if (!smoke) telemetry.refreshUsage(true);
+    });
+    register('usage:page', (provider: unknown) => {
+      if (provider !== 'codex' && provider !== 'claude') throw new Error('Invalid provider');
+      if (!smoke)
+        return shell.openExternal(
+          provider === 'codex'
+            ? 'https://chatgpt.com/codex/settings/usage'
+            : 'https://claude.ai/settings/usage',
+        );
+    });
+    const usageDirectory = path.join(app.getPath('userData'), 'integrations');
+    register('usage:claude-connect', () => {
+      if (smoke || !app.isPackaged) return false;
+      return installClaudeBridge(
+        usageDirectory,
+        path.join(root, 'assets', 'integrations', 'claude-statusline.cjs'),
+        process.execPath,
+      );
+    });
+    register('usage:claude-disconnect', () => {
+      if (smoke) return false;
+      return removeClaudeBridge(usageDirectory);
+    });
     register('window:resize', (corner: unknown, phase: unknown) => {
       if (
         typeof corner !== 'string' ||
@@ -509,8 +727,15 @@ if (!lock) {
       if (answer.response !== 1) return false;
       store.replace(input);
       telemetry.resetInterval();
+      store.save();
       applySettings();
-      win.webContents.reload();
+      emitSettings();
+      if (!smoke && (store.data.settings.presentation === 'app') !== nativeAppMode) {
+        app.relaunch({
+          args: process.argv.slice(1).filter((arg) => arg !== '--capture-live' && arg !== '--dock'),
+        });
+        app.quit();
+      } else win.webContents.reload();
       return true;
     });
     autoUpdater.autoDownload = false;
@@ -569,25 +794,9 @@ if (!lock) {
     const image = nativeImage.createFromPath(path.join(root, 'assets', 'tray.png'));
     tray = new Tray(image);
     tray.setToolTip('Cortexia Island');
-    const show = reveal;
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: 'Cortexia Island · Göster / etkileşimi aç', click: show },
-        { label: 'Gizle', click: () => win.hide() },
-        {
-          label: 'Ortala',
-          click: () => {
-            store.data.settings.displayId = null;
-            store.data.settings.position = null;
-            position();
-            show();
-          },
-        },
-        { type: 'separator' },
-        { label: 'Veri klasörünü aç', click: () => void shell.openPath(app.getPath('userData')) },
-        { label: 'Çıkış', click: () => app.quit() },
-      ]),
-    );
+    const show = () =>
+      store.data.settings.presentation === 'taskbar' ? navigate('settings') : reveal();
+    tray.setContextMenu(Menu.buildFromTemplate(applicationMenu()));
     tray.on('click', show);
     globalShortcut.register('CommandOrControl+Shift+I', () =>
       store.data.settings.clickThrough || !win.isVisible() ? show() : win.hide(),
@@ -616,24 +825,29 @@ if (!lock) {
     screen.on('display-added', () => position());
     screen.on('display-removed', () => position());
     let liveSamples = 0;
-    telemetry = new Telemetry(store, (sample) => {
-      if (!win.isDestroyed()) {
-        win.webContents.send('telemetry:snapshot', sample);
-        publishTaskbar();
-        liveSamples++;
-        if (captureLive && liveSamples === 4)
-          setTimeout(async () => {
-            const directory = path.join(process.cwd(), '.artifacts');
-            fs.mkdirSync(directory, { recursive: true });
-            fs.writeFileSync(
-              path.join(directory, 'live-preview.png'),
-              (await win.webContents.capturePage()).toPNG(),
-            );
-            console.log('Live preview saved locally.');
-          }, 300);
-      }
-    });
+    telemetry = new Telemetry(
+      store,
+      (sample) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('telemetry:snapshot', sample);
+          publishTaskbar();
+          liveSamples++;
+          if (captureLive && liveSamples === 4)
+            setTimeout(async () => {
+              const directory = path.join(process.cwd(), '.artifacts');
+              fs.mkdirSync(directory, { recursive: true });
+              fs.writeFileSync(
+                path.join(directory, 'live-preview.png'),
+                (await win.webContents.capturePage()).toPNG(),
+              );
+              console.log('Live preview saved locally.');
+            }, 300);
+        }
+      },
+      usageDirectory,
+    );
     powerMonitor.on('suspend', () => {
+      telemetry.flush();
       telemetry.stop();
       store.save();
     });
@@ -646,9 +860,21 @@ if (!lock) {
       await win.loadURL(process.env.ISLAND_DEV_URL);
     else await win.loadFile(path.join(root, 'dist', 'index.html'));
     await createTaskbar();
-    win.on('closed', () => app.quit());
+    win.on('close', (event) => {
+      if (!quitting) {
+        event.preventDefault();
+        win.hide();
+      }
+    });
+    win.on('closed', () => {
+      if (!quitting) app.quit();
+    });
     if (smoke) win.showInactive();
-    else win.show();
+    else if (
+      store.data.settings.presentation !== 'taskbar' ||
+      !store.data.settings.presentationSetupComplete
+    )
+      win.show();
     if (smoke) {
       win.webContents.send('telemetry:snapshot', fixture());
       setTimeout(async () => {
@@ -665,6 +891,62 @@ if (!lock) {
             throw new Error('Renderer smoke assertion failed: ' + JSON.stringify(state));
           const artifact = path.join(process.cwd(), '.artifacts');
           fs.mkdirSync(artifact, { recursive: true });
+          const pause = () => new Promise((resolve) => setTimeout(resolve, 220));
+          if (smokeApp) {
+            if (!nativeAppMode || !win.isResizable() || !win.isMaximizable() || win.isAlwaysOnTop())
+              throw new Error('Native application window flags failed');
+            const appUi = await win.webContents.executeJavaScript(
+              `({mode:document.querySelector('#app').classList.contains('application-mode'),edge:document.querySelector('#app').classList.contains('edge-attached')})`,
+            );
+            if (!appUi.mode || appUi.edge || win.getBounds().width !== 760)
+              throw new Error('Native application layout failed');
+            win.setSize(900, 700);
+            await pause();
+            if (win.getBounds().width !== 900) throw new Error('Native app resize failed');
+            await win.webContents.executeJavaScript(
+              `document.querySelector('[data-action="compact"]').click()`,
+            );
+            await pause();
+            if (!win.isMinimized()) throw new Error('Native app minimize failed');
+            win.restore();
+            reveal();
+            await pause();
+            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+            await pause();
+            if (!win.isMinimized()) throw new Error('Native app Escape minimize failed');
+            win.restore();
+            reveal();
+            await pause();
+            win.close();
+            await pause();
+            if (win.isDestroyed() || win.isVisible())
+              throw new Error('Native close must keep tracking in background');
+            reveal();
+            await pause();
+            fs.writeFileSync(
+              path.join(artifact, 'app-mode.png'),
+              (await win.webContents.capturePage()).toPNG(),
+            );
+            fs.writeFileSync(
+              path.join(artifact, 'smoke-app-result.json'),
+              JSON.stringify({
+                passed: true,
+                version: app.getVersion(),
+                checks: [
+                  'native-frame',
+                  'native-resize',
+                  'minimize',
+                  'escape-minimize',
+                  'close-to-background',
+                  'tray-recovery',
+                ],
+              }),
+            );
+            console.log('SMOKE APP PASS');
+            app.exit(0);
+            return;
+          }
           fs.writeFileSync(
             path.join(artifact, 'showcase.png'),
             (await win.webContents.capturePage()).toPNG(),
@@ -784,19 +1066,36 @@ if (!lock) {
           store.data.settings.opacity = 1;
           applySettings();
           emitSettings();
-          const pause = () => new Promise((resolve) => setTimeout(resolve, 180));
           if (taskbarWin) {
             const bar = await taskbarWin.webContents.executeJavaScript(
               `({api:!!window.islandTaskbar, metrics:[...document.querySelectorAll('[data-taskbar]')].map(e=>e.dataset.taskbar),errors:window.__islandErrors||[]})`,
             );
             if (!bar.api || bar.metrics.join(',') !== 'cost,energy' || bar.errors.length)
               throw new Error('Taskbar renderer failed: ' + JSON.stringify(bar));
+            await taskbarWin.webContents.executeJavaScript(
+              `window.__bolt=document.querySelector('.taskbar-electricity');`,
+            );
+            publishTaskbar();
+            await pause();
+            const electricityBar = await taskbarWin.webContents.executeJavaScript(
+              `({present:!!window.__bolt,stable:window.__bolt===document.querySelector('.taskbar-electricity'),animated:getComputedStyle(document.querySelector('.taskbar-electricity .icon')).animationName,reduce:matchMedia('(prefers-reduced-motion: reduce)').matches,overflow:document.querySelector('button').scrollWidth>document.querySelector('button').clientWidth})`,
+            );
+            if (
+              !electricityBar.present ||
+              !electricityBar.stable ||
+              (!electricityBar.reduce && electricityBar.animated !== 'current-glint') ||
+              electricityBar.overflow
+            )
+              throw new Error(
+                'Taskbar electricity animation/continuity failed: ' +
+                  JSON.stringify(electricityBar),
+              );
             fs.writeFileSync(
               path.join(artifact, 'taskbar.png'),
               (await taskbarWin.webContents.capturePage()).toPNG(),
             );
             await win.webContents.executeJavaScript(
-              `window.island.getSettings().then(s=>window.island.saveSettings({...s,taskbar:{enabled:false,metrics:['power','ping']}}))`,
+              `window.island.getSettings().then(s=>window.island.saveSettings({...s,taskbar:{enabled:false,metrics:['power','ping'],rotate:false}}))`,
             );
             await pause();
             if (taskbarWin.isVisible()) throw new Error('Taskbar hide failed');
@@ -811,7 +1110,53 @@ if (!lock) {
             if (!(await win.webContents.executeJavaScript(`!!document.querySelector('.expanded')`)))
               throw new Error('Taskbar expand failed');
             await win.webContents.executeJavaScript(
-              `window.island.getSettings().then(s=>window.island.saveSettings({...s,taskbar:{enabled:true,metrics:['cost','energy']}}))`,
+              `window.island.getSettings().then(s=>window.island.saveSettings({...s,taskbar:{enabled:true,metrics:['cost','energy'],rotate:false}}))`,
+            );
+            await win.webContents.executeJavaScript(
+              `window.island.getSettings().then(s=>window.island.saveSettings({...s,taskbar:{...s.taskbar,rotate:true}}))`,
+            );
+            await pause();
+            const barMetricsUi = () =>
+              taskbarWin!.webContents.executeJavaScript(
+                `[...document.querySelectorAll('[data-taskbar]')].map(e=>e.dataset.taskbar).join(',')`,
+              );
+            if ((await barMetricsUi()) !== 'sessionCost,sessionEnergy')
+              throw new Error('Bar rotation must begin with electricity');
+            await taskbarWin.webContents.executeJavaScript(
+              `document.querySelector('#app').dispatchEvent(new PointerEvent('pointerleave'))`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10400));
+            if ((await barMetricsUi()) !== 'codex5h,codexWeek')
+              throw new Error(
+                '10-second Codex rotation failed: ' +
+                  JSON.stringify(
+                    await taskbarWin.webContents.executeJavaScript(
+                      `({metrics:[...document.querySelectorAll('[data-taskbar]')].map(e=>e.dataset.taskbar),state:document.querySelector('#app').dataset,errors:window.__islandErrors})`,
+                    ),
+                  ),
+              );
+            fs.writeFileSync(
+              path.join(artifact, 'taskbar-codex.png'),
+              (await taskbarWin.webContents.capturePage()).toPNG(),
+            );
+            await taskbarWin.webContents.executeJavaScript(
+              `document.querySelector('#app').dispatchEvent(new PointerEvent('pointerenter'))`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10400));
+            if ((await barMetricsUi()) !== 'codex5h,codexWeek')
+              throw new Error('Hover must pause bar rotation');
+            await taskbarWin.webContents.executeJavaScript(
+              `document.querySelector('#app').dispatchEvent(new PointerEvent('pointerleave'))`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10400));
+            if ((await barMetricsUi()) !== 'claude5h,claudeWeek')
+              throw new Error('Claude rotation/resume failed');
+            fs.writeFileSync(
+              path.join(artifact, 'taskbar-claude.png'),
+              (await taskbarWin.webContents.capturePage()).toPNG(),
+            );
+            await win.webContents.executeJavaScript(
+              `window.island.getSettings().then(s=>window.island.saveSettings({...s,taskbar:{...s.taskbar,rotate:false}}))`,
             );
           }
           await win.webContents.executeJavaScript(
@@ -830,18 +1175,38 @@ if (!lock) {
           const dropRect = await win.webContents.executeJavaScript(
             `(()=>{const r=document.querySelector('.droplet-control').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+8)};})()`,
           );
+          win.webContents.focus();
+          await win.webContents.executeJavaScript(
+            `window.__dropEvents=[];document.querySelector('.droplet-control').addEventListener('pointerdown',e=>window.__dropEvents.push(['down',e.button,e.clientY]));document.querySelector('.droplet-control').addEventListener('pointermove',e=>window.__dropEvents.push(['move',e.clientY]));`,
+          );
+          win.webContents.sendInputEvent({ type: 'mouseMove', ...dropRect });
+          await pause();
           win.webContents.sendInputEvent({
             type: 'mouseDown',
             ...dropRect,
             button: 'left',
             clickCount: 1,
           });
-          win.webContents.sendInputEvent({ type: 'mouseMove', x: dropRect.x, y: dropRect.y + 40 });
+          await pause();
+          win.webContents.sendInputEvent({
+            type: 'mouseMove',
+            x: dropRect.x,
+            y: dropRect.y + 40,
+            button: 'left',
+          });
           await pause();
           const stretch = await win.webContents.executeJavaScript(
             `document.querySelector('.droplet-control').style.transform`,
           );
-          if (!stretch.includes('scale')) throw new Error('Droplet elastic stretch failed');
+          if (!stretch.includes('scale'))
+            throw new Error(
+              'Droplet elastic stretch failed: ' +
+                JSON.stringify(
+                  await win.webContents.executeJavaScript(
+                    `({events:window.__dropEvents,reduced:document.querySelector('#app').className,rect:document.querySelector('.droplet-control').getBoundingClientRect().toJSON()})`,
+                  ),
+                ),
+            );
           win.webContents.sendInputEvent({
             type: 'mouseUp',
             x: dropRect.x,
@@ -852,6 +1217,112 @@ if (!lock) {
           await pause();
           if (!(await win.webContents.executeJavaScript(`!!document.querySelector('.expanded')`)))
             throw new Error('Droplet pull-open failed');
+          await win.webContents.executeJavaScript(
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,widgets:['energy','power','codex','claude']}))`,
+          );
+          win.webContents.send('telemetry:snapshot', fixture());
+          await pause();
+          const usageUi = await win.webContents.executeJavaScript(
+            `({bars:[...document.querySelectorAll('[data-usage]')].map(e=>({id:e.dataset.usage,value:e.getAttribute('aria-valuenow')})),energy:document.querySelector('[data-value="session-energy"]').textContent,bridge:!!document.querySelector('.energy-bridge'),daily:document.querySelector('[data-value="daily-summary"]').textContent})`,
+          );
+          if (
+            usageUi.bars.length !== 4 ||
+            usageUi.bars[0].value !== '34' ||
+            usageUi.bars[2].value !== '23.5' ||
+            usageUi.energy !== '0,842' ||
+            !usageUi.bridge ||
+            !usageUi.daily.includes('Bugün')
+          )
+            throw new Error('Usage/session presentation failed: ' + JSON.stringify(usageUi));
+          fs.writeFileSync(
+            path.join(artifact, 'usage-demo.png'),
+            (await win.webContents.capturePage()).toPNG(),
+          );
+          const usageBounds = win.getBounds();
+          win.setSize(
+            usageBounds.width,
+            Math.min(1000, screen.getDisplayMatching(usageBounds).workArea.height),
+          );
+          await pause();
+          fs.writeFileSync(
+            path.join(artifact, 'usage-demo.png'),
+            (await win.webContents.capturePage()).toPNG(),
+          );
+          win.setBounds(usageBounds);
+          await pause();
+          const missingUsage = fixture();
+          missingUsage.usage = {
+            codex: emptyUsage('codex-app-server'),
+            claude: { ...fixture().usage!.claude, status: 'stale' },
+          };
+          win.webContents.send('telemetry:snapshot', missingUsage);
+          await pause();
+          const missingUi = await win.webContents.executeJavaScript(
+            `({codex:document.querySelector('[data-value="codex-fiveHour"]').textContent,claude:document.querySelector('[data-value="claude-status"]').textContent})`,
+          );
+          if (missingUi.codex !== '—' || missingUi.claude !== 'ESKİ VERİ')
+            throw new Error('Missing/stale usage must be explicit');
+          await win.webContents.executeJavaScript(
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,reducedMotion:true,presentation:'taskbar',presentationSetupComplete:true}))`,
+          );
+          await pause();
+          if (win.isVisible()) throw new Error('Bar-only must hide island');
+          if (
+            taskbarWin &&
+            (await taskbarWin.webContents.executeJavaScript(
+              `getComputedStyle(document.querySelector('.taskbar-electricity .icon')).animationName`,
+            )) !== 'none'
+          )
+            throw new Error('Taskbar electricity must respect reduced motion');
+          navigate('settings');
+          await pause();
+          const tabs = await win.webContents.executeJavaScript(
+            `({count:document.querySelectorAll('[data-tab]').length,mode:document.querySelectorAll('input[name="presentation"]').length})`,
+          );
+          if (!win.isVisible() || tabs.mode !== 4 || tabs.count !== 5)
+            throw new Error('Bar-only settings recovery/mode selector failed');
+          await win.webContents.executeJavaScript(`window.island.setView('expanded')`);
+          await pause();
+          if (win.isVisible()) throw new Error('Closing bar-only settings must hide island');
+          await win.webContents.executeJavaScript(
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,presentation:'island'}))`,
+          );
+          await pause();
+          if (!win.isVisible() || taskbarWin?.isVisible())
+            throw new Error('Island-only must hide bar and reveal island');
+          navigate('expanded');
+          await pause();
+          const animation = await win.webContents.executeJavaScript(
+            `getComputedStyle(document.querySelector('.energy-bridge .icon')).animationName`,
+          );
+          if (animation !== 'none')
+            throw new Error('Reduced motion must disable electricity animation');
+          const beforeMenus = contextMenuCount;
+          win.webContents.sendInputEvent({
+            type: 'mouseDown',
+            x: 130,
+            y: 110,
+            button: 'right',
+            clickCount: 1,
+          });
+          win.webContents.sendInputEvent({
+            type: 'mouseUp',
+            x: 130,
+            y: 110,
+            button: 'right',
+            clickCount: 1,
+          });
+          await pause();
+          if (contextMenuCount <= beforeMenus) throw new Error('Native right-click menu failed');
+          win.close();
+          await pause();
+          if (win.isDestroyed() || win.isVisible()) throw new Error('Close-to-background failed');
+          reveal();
+          await win.webContents.executeJavaScript(
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,presentation:'both',reducedMotion:false,widgets:['energy','power','network']}))`,
+          );
+          win.webContents.send('telemetry:snapshot', fixture());
+          await pause();
           await win.webContents.executeJavaScript(
             `window.island.getSettings().then(s=>window.island.saveSettings({...s,widgets:['health','insights']}))`,
           );
@@ -919,7 +1390,7 @@ if (!lock) {
           const widgetCount = await win.webContents.executeJavaScript(
             `document.querySelectorAll('input[name="widget"]').length`,
           );
-          if (widgetCount !== 8) throw new Error('Widget selector failed');
+          if (widgetCount !== 10) throw new Error('Widget selector failed');
           fs.writeFileSync(
             path.join(artifact, 'settings.png'),
             (await win.webContents.capturePage()).toPNG(),
@@ -996,7 +1467,20 @@ if (!lock) {
                   'droplet-size-stretch-pull-open',
                   'electrical-missing-data-and-meter-warning',
                   'energy-insights',
-                  ...(taskbarWin ? ['taskbar-state-selection-hide-expand'] : []),
+                  'boot-session-energy-cost',
+                  'codex-claude-two-window-bars',
+                  'usage-missing-stale',
+                  'presentation-modes-settings-recovery',
+                  'electricity-animation-reduced-motion',
+                  ...(taskbarWin ? ['taskbar-electricity-animation-and-stable-readings'] : []),
+                  'native-right-click-menu',
+                  'close-to-background',
+                  ...(taskbarWin
+                    ? [
+                        'taskbar-state-selection-hide-expand',
+                        'taskbar-ten-second-cycle-hover-pause-resume',
+                      ]
+                    : []),
                 ],
                 ...state,
               },
@@ -1032,8 +1516,10 @@ if (!lock) {
     });
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', () => {
+    quitting = true;
     if (moveTimer) clearTimeout(moveTimer);
     globalShortcut.unregisterAll();
+    telemetry?.flush();
     telemetry?.stop();
     if (store) {
       store.save();
