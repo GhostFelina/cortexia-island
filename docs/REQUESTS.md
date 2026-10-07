@@ -42,3 +42,12 @@ Implemented: actual Codex 5-hour/weekly provider, reversible documented Claude C
 
 Obtain signing/notarization credentials, exercise signed upgrades and validate an actual power meter. The first alpha remains unsigned and labels modeled power as an estimate. The browser's image tool did not expose a verifiable model version; see BRAND.md for provenance.
 Latest follow-up: also show the tiny electricity animation specifically between the taskbar cost and tracked-kWh readings. Alpha.8 adds it with stable DOM updates (live readings do not restart the animation) and reduced-motion handling.
+
+## Owner feedback and pause — 2026-10-07
+
+Owner explicitly paused work for sleep/terminal closure and requested continuation tomorrow. Preserve all prior tasks.
+
+- Electricity cost, general tracking and analysis are still amateur. Reconsider how to calculate and how the information becomes useful; develop these with the owner.
+- Codex/Claude quotas are reportedly incorrect. This is an open correctness issue; prioritize comparison with actual official usage pages/account/window/freshness before claiming accuracy.
+- Add/improve background and theme, plus Codex and Claude icons. These are upcoming tasks; show design previews.
+- The ten-second taskbar cycle and tiny electricity animation have been implemented/tested/installed locally, with public version alpha.8 released. Final public-binary alignment and installed checks remain pending; see HANDOFF.md.

@@ -1,0 +1,16 @@
+{
+  "project": "Cortexia Island",
+  "status": "paused",
+  "reason": "Owner explicitly requested sleep break and terminal closure; continue tomorrow.",
+  "updated": "2026-10-07",
+  "branch": "main",
+  "version": "0.1.0-alpha.8",
+  "handoff": "docs/HANDOFF.md",
+  "knownIssues": "docs/KNOWN_ISSUES.md",
+  "next": [
+    "Verify reported Codex/Claude quota mismatch",
+    "Develop useful professional electricity calculation/tracking/analysis",
+    "Background/theme and Codex/Claude icons",
+    "Align installed Windows binary with published alpha.8 and finish checks"
+  ]
+}
