@@ -52,7 +52,9 @@ jobs:
             release/*.dmg
             release/*.zip
             release/*.blockmap
-            release/*.yml
+            release/alpha*.yml
+            release/beta*.yml
+            release/latest*.yml
             release/SHA256-*.txt
           retention-days: 30
   publish:

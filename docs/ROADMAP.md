@@ -25,6 +25,10 @@
 - [ ] Consolidate widget/provider registration and versioned extension contracts
 - [ ] More complete accessibility and mixed-DPI/multi-display testing
 
+## Next design pass — requested 2026-10-07
+
+- [ ] Refine the island and its data presentation: typography, number alignment, spacing, compact composition, mini charts and restrained material/lighting detail. Preserve readability and true black surfaces. The owner asked to queue this after the first working release.
+
 ## Next widgets — user guided
 
 Reserve the next iteration for the owner’s requested widget list. Candidate investigations include media playback, focus timer, device temperatures, battery charge rate and notifications. Availability, measurement scope and permissions must be clear before implementation.

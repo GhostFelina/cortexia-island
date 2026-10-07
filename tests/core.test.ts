@@ -160,6 +160,7 @@ test('release manifests merge both mac architectures and reject mismatched versi
       const folder = path.join(dir, 'packages', `packages-mac-${arch}`);
       fs.mkdirSync(folder, { recursive: true });
       fs.writeFileSync(path.join(folder, `island-${arch}.zip`), 'fixture');
+      fs.writeFileSync(path.join(folder, 'builder-debug.yml'), 'diagnostics: true');
       fs.writeFileSync(
         path.join(folder, 'alpha-mac.yml'),
         JSON.stringify({
@@ -171,11 +172,16 @@ test('release manifests merge both mac architectures and reject mismatched versi
     execFileSync(process.execPath, [script], { cwd: dir });
     const merged = parse(fs.readFileSync(path.join(dir, 'release', 'alpha-mac.yml'), 'utf8'));
     assert.equal(merged.files.length, 2);
+    assert.equal(fs.existsSync(path.join(dir, 'release', 'builder-debug.yml')), false);
+    fs.rmSync(path.join(dir, 'release'), { recursive: true, force: true });
     fs.writeFileSync(
       path.join(dir, 'packages', 'packages-mac-x64', 'alpha-mac.yml'),
-      JSON.stringify({ version: '0.2.0', files: [] }),
+      JSON.stringify({ version: '0.2.0', files: [{ url: 'island-x64.zip' }] }),
     );
-    assert.throws(() => execFileSync(process.execPath, [script], { cwd: dir, stdio: 'pipe' }));
+    assert.throws(
+      () => execFileSync(process.execPath, [script], { cwd: dir, stdio: 'pipe' }),
+      (error: any) => String(error.stderr).includes('Mismatched update versions'),
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

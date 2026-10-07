@@ -5,7 +5,7 @@ const label = process.argv[2] || process.platform;
 if (!/^[a-z0-9-]+$/.test(label)) throw new Error('Invalid platform label');
 const files = fs
   .readdirSync('release')
-  .filter((n) => /\.(exe|dmg|zip|yml|blockmap)$/.test(n))
+  .filter((n) => /\.(exe|dmg|zip|blockmap)$/.test(n) || /^(alpha|beta|latest)(-mac)?\.yml$/.test(n))
   .sort();
 fs.writeFileSync(
   path.join('release', `SHA256-${label}.txt`),

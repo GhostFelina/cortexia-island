@@ -10,8 +10,11 @@ for (const folder of fs.readdirSync(source)) {
   if (!fs.statSync(dir).isDirectory()) continue;
   for (const name of fs.readdirSync(dir)) {
     const file = path.join(dir, name);
-    if (name.endsWith('.yml')) {
+    if (name.endsWith('.yml') && !/^(alpha|beta|latest)(-mac)?\.yml$/.test(name)) continue;
+    if (/^(alpha|beta|latest)(-mac)?\.yml$/.test(name)) {
       const value = yaml.parse(fs.readFileSync(file, 'utf8'));
+      if (typeof value.version !== 'string' || !Array.isArray(value.files) || !value.files.length)
+        throw new Error('Invalid update manifest: ' + name);
       const old = manifests.get(name);
       if (old) {
         if (old.version !== value.version) throw new Error('Mismatched update versions');
