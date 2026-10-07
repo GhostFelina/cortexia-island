@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.6 — 2026-10-07
+
+- Ask only city/district for automatic standard residential EPDK pricing; remove required manual unit price/subscription/tier controls and label the estimate scope.
+- Windows live taskbar-area overlay with one or two selected metrics, click-to-open and hide; independent of the native weather button. Avoid covering left-aligned Start buttons.
+- Mac-default droplet compact mode, native drag grip, click-open and elastic pull-open; portable preview mode and reduced motion.
+- Add electrical health from nullable meter metadata and protection reports, plus tracked average power and explicit 100-hour energy projections.
+- Eight widgets, additive backup-compatible settings and native interaction regression coverage; 15 unit tests.
+
 ## 0.1.0-alpha.5 — 2026-10-07
 
 - Center compact metric content between symmetric brand/expand controls at every window width.

@@ -15,6 +15,7 @@ Reviewed the owner's Desktop/denetle.png and actual Electron captures of compact
 
 ## Validation
 
+- Alpha.5 centers compact metric content between symmetric controls and verifies the center and absence of overflow in native smoke.
 - Thirteen unit tests cover energy math, online tariffs, history, settings, backup recovery, monitor geometry and release metadata.
 - Native Electron smoke checks the visible daily/hourly demo cost, energy-first card order, missing-tariff focus and persisted price, plus hide/show, resizing, opacity recovery, widgets and both connected Windows monitors.
 - Renderer captures were visually reviewed. Keyboard focus and reduced motion are exercised; broad screen-reader and contrast auditing remain before stable release.
@@ -23,3 +24,5 @@ Reviewed the owner's Desktop/denetle.png and actual Electron captures of compact
 ## Product boundary
 
 Default PC watts are an estimate from the configured CPU power profile; a compatible outlet meter is required for wall measurement. Costs cover tracked, priced samples only. These are useful PC cost estimates rather than household bills. Signed distribution, real MacBook/notebook checks and meter hardware validation remain stable-release requirements.
+
+Alpha.6 removes subscription/tier/unit-price controls from tariff onboarding. The taskbar composition uses two small typographic stacks and a brand anchor. A droplet provides a quiet Mac compact control with elastic pull feedback. Electrical information remains optional to keep cost hierarchy clear. Native smoke verifies actual own-window interactions; real MacBook ergonomics and broader taskbar/DPI layouts remain to be checked.

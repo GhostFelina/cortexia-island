@@ -2,9 +2,9 @@
 
 ## Supported flow
 
-First launch opens setup if no tariff or completed setup exists. Choose one of 81 Turkish provinces, enter district/neighborhood, and select subscription and household tier. **Find online and apply** retrieves the latest currently effective EPDK table, validates column names, date and one matching residential row, then saves the tax-inclusive TRY/kWh estimate. No location or identifier is sent to EPDK. Skip and manual price entry remain available.
+First launch opens setup if no tariff or completed setup exists. Choose one of 81 Turkish provinces and enter a district. No unit price, subscription or tier input is required. **Find online and apply** retrieves the latest currently effective EPDK table, validates column names, date and one matching residential row, then saves the tax-inclusive TRY/kWh estimate. No location or identifier is sent to EPDK. Skipping remains available. The UI deliberately has no manual unit-price entry.
 
-The national residential price is not determined by city. The tier applies to total household consumption, not just the PC: up to 8 kWh/day is the lower tier; the portion above it uses the upper tier. Cortexia uses the selected tier for a PC cost estimate and does not reconstruct a household bill or predict crossing the household threshold. Special contracts, SKTT, commercial and time-of-use subscriptions cannot be identified from city/district alone and are not automatically priced.
+The national residential price is not determined by city. The tier applies to total household consumption, not just the PC: up to 8 kWh/day is the lower tier; the portion above it uses the upper tier. Cortexia automatically uses the standard residential lower tier for a PC cost estimate and does not reconstruct a household bill or predict crossing the household threshold. Special contracts, SKTT, commercial and time-of-use subscriptions cannot be identified from city/district alone and cannot be inferred. The displayed amount is explicitly a standard-tariff estimate, not a verified rate for that household. The city/district are local preferences, not a price discriminator.
 
 ## Sources reviewed 2026-10-07
 

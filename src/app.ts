@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   LayoutGrid,
   EyeOff,
+  Droplet,
   type IconNode,
 } from 'lucide';
 import './style.css';
@@ -29,10 +30,13 @@ import type {
   AppInfo,
   WidgetId,
   UpdateStatus,
+  TaskbarAPI,
+  TaskbarMetric,
 } from '../shared/types';
 declare global {
   interface Window {
     island?: IslandAPI;
+    islandTaskbar?: TaskbarAPI;
     __islandErrors?: string[];
   }
 }
@@ -66,6 +70,7 @@ const icons: Record<string, IconNode> = {
   shield: ShieldCheck,
   grid: LayoutGrid,
   eyeOff: EyeOff,
+  droplet: Droplet,
 };
 const icon = (name: string, cls = '') =>
   createElement(icons[name] ?? LayoutGrid, {
@@ -130,7 +135,100 @@ const catalog: Record<
     description: ['Yerel saat ve tarih', 'Local time and date'],
     icon: 'clock',
   },
+  health: {
+    name: ['Elektrik sağlığı', 'Electrical health'],
+    description: [
+      'Ölçerden voltaj, akım ve koruma uyarıları',
+      'Meter voltage, current and protection reports',
+    ],
+    icon: 'shield',
+  },
+  insights: {
+    name: ['Enerji içgörüleri', 'Energy insights'],
+    description: [
+      'Tüketim ritmi ve açık varsayımlı projeksiyonlar',
+      'Consumption rhythm and transparent projections',
+    ],
+    icon: 'chart',
+  },
 };
+const taskbarLabels: Record<TaskbarMetric, [string, string]> = {
+  cost: ['Bugün · tahmini', 'Today · estimated'],
+  energy: ['Takip · kWh', 'Tracked · kWh'],
+  power: ['Anlık · W', 'Live · W'],
+  down: ['İndirme · Mbps', 'Download · Mbps'],
+  up: ['Yükleme · Mbps', 'Upload · Mbps'],
+  ping: ['Ping · ms', 'Ping · ms'],
+};
+function isDroplet() {
+  return (
+    view === 'compact' &&
+    (settings.compactMode === 'droplet' ||
+      (settings.compactMode === 'auto' && info.platform === 'darwin'))
+  );
+}
+function healthCard() {
+  return `<section class="health-card" data-widget-card="health"><div class="card-heading"><span>${icon('shield')}${t('ELEKTRİK SAĞLIĞI', 'ELECTRICAL HEALTH')}</span><span class="source-chip">${t('ÖLÇER', 'METER')}</span></div><p class="health-status" data-value="health">—</p><div class="electrical-grid">${[
+    ['voltage', 'Voltaj / Voltage', 'V'],
+    ['current', t('Akım', 'Current'), 'A'],
+    ['frequency', t('Frekans', 'Frequency'), 'Hz'],
+    ['temperature', t('Ölçer sıcaklığı', 'Meter temperature'), '°C'],
+    ['powerFactor', t('Güç faktörü', 'Power factor'), ''],
+  ]
+    .map(
+      ([key, label, unit]) =>
+        `<div><span>${label}</span><strong><b data-value="${key}">—</b><small> ${unit}</small></strong></div>`,
+    )
+    .join(
+      '',
+    )}</div><p class="microcopy">${t('Bu veriler ölçerin bildirimleridir; şebeke veya PSU güvenlik teşhisi değildir. Eksik değerler tahmin edilmez.', 'These are meter reports, not a grid or PSU safety diagnosis. Missing values are not estimated.')}</p></section>`;
+}
+function insightsCard() {
+  return `<section class="insights-card" data-widget-card="insights"><div class="card-heading"><span>${icon('chart')}${t('ENERJİ İÇGÖRÜLERİ', 'ENERGY INSIGHTS')}</span></div><div class="insight-row"><span>${t('Takip edilen ortalama güç', 'Average tracked power')}</span><strong data-value="average-power">—</strong></div><div class="insight-row"><span>${t('Bu güç sabit kalırsa · 100 saat', 'If this power stays constant · 100 hours')}</span><strong data-value="projection">—</strong></div><p class="microcopy">${t('1 kWh = 100 W ile 10 saat. Uygulama kapalıyken tüketim eklenmez. Uykuya geçmek tüketimi azaltabilir; tasarruf miktarı cihazına bağlıdır.', '1 kWh = 10 hours at 100 W. Energy is not tracked while closed. Sleep can reduce consumption; savings depend on your device.')}</p></section>`;
+}
+function bindDroplet() {
+  const drop = root.querySelector<HTMLButtonElement>('.droplet-control');
+  if (!drop) return;
+  let origin = 0,
+    stretch = 0,
+    active = false,
+    suppressClick = false;
+  drop.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    origin = event.clientY;
+    stretch = 0;
+    active = true;
+    suppressClick = false;
+    drop.setPointerCapture(event.pointerId);
+    drop.style.transition = 'none';
+  });
+  drop.addEventListener('pointermove', (event) => {
+    if (!active) return;
+    stretch = Math.max(-12, Math.min(44, event.clientY - origin));
+    if (Math.abs(stretch) > 4) suppressClick = true;
+    if (!settings.reducedMotion)
+      drop.style.transform = `translateY(${stretch * 0.22}px) scale(${1 - Math.abs(stretch) / 300},${1 + Math.abs(stretch) / 130})`;
+  });
+  const finish = (event: PointerEvent) => {
+    if (!active) return;
+    active = false;
+    if (drop.hasPointerCapture(event.pointerId)) drop.releasePointerCapture(event.pointerId);
+    drop.style.transition = settings.reducedMotion
+      ? 'none'
+      : 'transform 520ms cubic-bezier(.2,1.6,.35,1)';
+    drop.style.transform = '';
+    if (event.type !== 'pointercancel' && stretch >= 32) void action('expand');
+  };
+  drop.addEventListener('pointerup', finish);
+  drop.addEventListener('pointercancel', finish);
+  drop.addEventListener('click', (event) => {
+    if (suppressClick) {
+      event.preventDefault();
+      return;
+    }
+    void action('expand');
+  });
+}
 function button(action: string, label: string, glyph: string, cls = '') {
   return `<button class="icon-button ${cls}" data-action="${action}" aria-label="${label}" title="${label}">${icon(glyph)}</button>`;
 }
@@ -163,14 +261,21 @@ function compactWidget(id: WidgetId) {
     return `<span class="compact-stat">${value('compact-cpu', '%', 'cpu')}<span class="compact-context">CPU</span></span>`;
   if (id === 'battery')
     return `<span class="compact-stat">${value('compact-battery', '%', 'battery')}<span class="compact-context">${t('BATARYA', 'BATTERY')}</span></span>`;
+  if (id === 'health')
+    return `<span class="compact-stat">${value('voltage', 'V', 'shield')}<span class="compact-context">${t('ÖLÇER', 'METER')}</span></span>`;
+  if (id === 'insights')
+    return `<span class="compact-stat">${value('average-power', '', 'chart')}<span class="compact-context">${t('ORTALAMA', 'AVERAGE')}</span></span>`;
   return `<span class="compact-stat">${value('clock', '', 'clock')}<span class="compact-context">${t('YEREL SAAT', 'LOCAL TIME')}</span></span>`;
 }
 function render() {
-  root.className = `view-${view}${settings.reducedMotion ? ' reduced-motion' : ''}${docked ? ' edge-attached' : ''}`;
-  if (view === 'compact') {
+  root.className = `view-${view}${settings.reducedMotion ? ' reduced-motion' : ''}${docked ? ' edge-attached' : ''}${isDroplet() ? ' droplet-mode' : ''}`;
+  if (isDroplet()) {
+    root.innerHTML = `<main class="island droplet-island"><div class="droplet-grip drag-area" title="${t('Sürükleyerek taşı', 'Drag to move')}"></div><button class="droplet-control" aria-label="${t('Adayı aç · aşağı çekerek esnet', 'Open island · pull down to stretch')}">${icon('droplet')}<span class="drop-glint"></span></button></main>`;
+    bindDroplet();
+  } else if (view === 'compact') {
     root.innerHTML = `<main class="island compact"><div class="compact-brand drag-area"><span class="lens"></span></div><button class="compact-readout" data-action="expand" aria-label="${t('Adayı genişlet', 'Expand island')}">${settings.widgets.slice(0, 2).map(compactWidget).join('<span class="compact-separator"></span>')}</button>${button('expand', t('Genişlet', 'Expand'), 'chevron')}</main>`;
   } else if (view === 'expanded') {
-    root.innerHTML = `<main class="island expanded"><header><div class="brand drag-area"><span class="lens"></span><span>Cortexia <b>Island</b></span><span class="beta">${info.preview ? 'DEMO' : 'α'}</span></div><div class="header-controls">${button('settings', t('Ayarlar', 'Settings'), 'gear')}${button('compact', t('Küçült', 'Collapse'), 'minus')}</div></header><div class="scroll-body">${showHistory ? historyHtml() : settings.widgets.map((id) => (id === 'network' ? networkCard() : id === 'power' ? powerCard() : id === 'energy' ? energyCard() : smallCard(id))).join('')}</div><footer><span class="footer-status"><i class="status-dot" data-status></i><span data-value="footer">${t('Ölçüm başlıyor', 'Starting readings')}</span></span><div class="footer-actions">${button('history', t('Tüketim geçmişi', 'Energy history'), 'chart', showHistory ? 'active' : '')}${button('widgets', t('Widget ekle', 'Add widgets'), 'plus')}</div></footer><div class="error-banner" data-error hidden></div></main>`;
+    root.innerHTML = `<main class="island expanded"><header><div class="brand drag-area"><span class="lens"></span><span>Cortexia <b>Island</b></span><span class="beta">${info.preview ? 'DEMO' : 'α'}</span></div><div class="header-controls">${button('settings', t('Ayarlar', 'Settings'), 'gear')}${button('compact', t('Küçült', 'Collapse'), 'minus')}</div></header><div class="scroll-body">${showHistory ? historyHtml() : settings.widgets.map((id) => (id === 'network' ? networkCard() : id === 'power' ? powerCard() : id === 'energy' ? energyCard() : id === 'health' ? healthCard() : id === 'insights' ? insightsCard() : smallCard(id))).join('')}</div><footer><span class="footer-status"><i class="status-dot" data-status></i><span data-value="footer">${t('Ölçüm başlıyor', 'Starting readings')}</span></span><div class="footer-actions">${button('history', t('Tüketim geçmişi', 'Energy history'), 'chart', showHistory ? 'active' : '')}${button('widgets', t('Widget ekle', 'Add widgets'), 'plus')}</div></footer><div class="error-banner" data-error hidden></div></main>`;
   } else {
     root.innerHTML = settingsHtml();
   }
@@ -202,7 +307,7 @@ function render() {
     root.appendChild(shoulder);
   }
   const island = root.querySelector('.island');
-  for (const corner of ['nw', 'ne', 'sw', 'se']) {
+  for (const corner of isDroplet() ? [] : ['nw', 'ne', 'sw', 'se']) {
     const handle = document.createElement('div');
     handle.className = `resize-handle resize-${corner}`;
     handle.setAttribute(
@@ -238,7 +343,7 @@ function settingsHtml() {
     ...settings.widgets,
     ...(Object.keys(catalog) as WidgetId[]).filter((id) => !selected.has(id)),
   ];
-  return `<main class="island settings"><header><div class="brand drag-area"><span class="lens"></span><span>${t('Ada ayarları', 'Island settings')}</span></div>${button('expand', t('Geri dön', 'Go back'), 'close')}</header><form id="settings-form" class="scroll-body settings-body"><section id="widget-list"><div class="section-title">${icon('grid')}<h2>${t('ADANI OLUŞTUR', 'BUILD YOUR ISLAND')}</h2><span>${settings.widgets.length}/6</span></div><p class="section-intro">${t('İstediğin widget’ları ekle, sıralarını değiştir.', 'Choose your widgets and arrange their order.')}</p><div class="widget-list">${widgets
+  return `<main class="island settings"><header><div class="brand drag-area"><span class="lens"></span><span>${t('Ada ayarları', 'Island settings')}</span></div>${button('expand', t('Geri dön', 'Go back'), 'close')}</header><form id="settings-form" class="scroll-body settings-body"><section id="widget-list"><div class="section-title">${icon('grid')}<h2>${t('ADANI OLUŞTUR', 'BUILD YOUR ISLAND')}</h2><span>${settings.widgets.length}/8</span></div><p class="section-intro">${t('İstediğin widget’ları ekle, sıralarını değiştir.', 'Choose your widgets and arrange their order.')}</p><div class="widget-list">${widgets
     .map((id) => {
       const c = catalog[id],
         idx = settings.widgets.indexOf(id);
@@ -246,7 +351,7 @@ function settingsHtml() {
     })
     .join(
       '',
-    )}</div></section><section><div class="section-title">${icon('bolt')}<h2>${t('ENERJİ & ELEKTRİK', 'ENERGY & ELECTRICITY')}</h2></div><div class="form-grid"><label>${t('Güç kaynağı', 'Power source')}<select name="powerMode"><option value="estimate" ${settings.powerMode === 'estimate' ? 'selected' : ''}>${t('Yük profili · tahmin', 'Load profile · estimate')}</option><option value="shelly" ${settings.powerMode === 'shelly' ? 'selected' : ''}>Shelly Gen2/Gen3 · ${t('ölçüm', 'meter')}</option></select></label><label>${t('Güç ölçer yerel IP', 'Power meter local IP')}<input name="meterHost" value="${e(settings.meterHost)}" placeholder="192.168.1.50" maxlength="15"></label><label>${t('Boşta güç (W)', 'Idle power (W)')}<input name="idleWatts" type="number" min="0" max="10000" step="1" value="${settings.idleWatts}"></label><label>${t('Yoğun yük (W)', 'Full load (W)')}<input name="maxWatts" type="number" min="0" max="20000" step="1" value="${settings.maxWatts}"></label><label>${t('Birim fiyat / kWh', 'Price per kWh')}<input name="tariff" type="number" min="0" max="10000" step="0.0001" value="${settings.tariff ?? ''}" placeholder="${t('Faturandan gir', 'From your bill')}"></label><label>${t('Para birimi', 'Currency')}<select name="currency">${['TRY', 'USD', 'EUR'].map((c) => `<option ${c === settings.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label></div><p class="microcopy">${t('Yük profili priz ölçümü değildir; GPU, ekran ve PSU kayıpları ayrıca değişebilir. Varsayılan 65–350 W profilini cihazına göre ayarla. Shelly, yalnızca PC’nin bağlı olduğu prizi ölçmelidir.', 'A load profile is not a wall measurement; GPU, monitor and PSU losses vary. Calibrate the default 65–350 W profile. Connect only the PC to the metered outlet.')}</p><p class="microcopy">${t('Tarife değişikliği sonraki örneklere uygulanır. Tüketim yalnızca açıkken takip edilir; bu tutar toplam ev faturası değildir.', 'Tariff changes apply to future samples. Only running time is tracked; this is not your total household bill.')}</p></section><section><div class="section-title">${icon('wifi')}<h2>${t('BAĞLANTI', 'CONNECTION')}</h2></div><div class="form-grid"><label>${t('Ağ adaptörü', 'Network adapter')}<select name="networkInterface"><option value="auto">${t('Otomatik · varsayılan rota', 'Automatic · default route')}</option>${(snapshot?.network.interfaces ?? []).map((n) => `<option value="${e(n.id)}" ${n.id === settings.networkInterface ? 'selected' : ''}>${e(n.name)}</option>`).join('')}</select></label><label>${t('Ping hedefi', 'Ping target')}<input name="pingHost" value="${e(settings.pingHost)}" maxlength="253" required></label></div><p class="microcopy">${t('Hızlar adaptördeki mevcut trafiktir. İnternet paketinin azami hızını ölçen bir speedtest değildir. Ping seçili hedefi kontrol eder; engellenen ICMP yanıtları bağlantı sorunu gibi görünebilir.', 'Rates show current adapter traffic, not your plan’s maximum speed. Ping checks the selected target; blocked ICMP replies can appear as a connectivity issue.')}</p></section><section><div class="section-title">${icon('gear')}<h2>${t('GÖRÜNÜM & DAVRANIŞ', 'APPEARANCE & BEHAVIOR')}</h2></div><div class="form-grid"><label>${t('Dil', 'Language')}<select name="language"><option value="tr" ${settings.language === 'tr' ? 'selected' : ''}>Türkçe</option><option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option></select></label><label>${t('Ekran', 'Display')}<select name="displayId"><option value="auto">${t('Birincil ekran', 'Primary display')}</option>${info.displays.map((d) => `<option value="${d.id}" ${d.id === settings.displayId ? 'selected' : ''}>${e(d.label)}</option>`).join('')}</select></label><label>${t('Üst boşluk (px)', 'Top offset (px)')}<input name="topOffset" type="number" min="0" max="300" value="${settings.topOffset}"></label></div><div class="check-options"><label><input type="checkbox" name="alwaysOnTop" ${settings.alwaysOnTop ? 'checked' : ''}>${t('Diğer pencerelerin üzerinde tut', 'Keep on top')}</label><label><input type="checkbox" name="launchAtLogin" ${settings.launchAtLogin ? 'checked' : ''}>${t('Oturum açıldığında başlat', 'Launch at login')}</label><label><input type="checkbox" name="reducedMotion" ${settings.reducedMotion ? 'checked' : ''}>${t('Hareketleri azalt', 'Reduce motion')}</label></div></section><div class="form-feedback" role="status" data-feedback></div><button class="primary-button" type="submit">${t('Değişiklikleri kaydet', 'Save changes')}</button><section class="maintenance"><div class="section-title">${icon('shield')}<h2>${t('YEDEK & GÜNCELLEME', 'BACKUP & UPDATE')}</h2></div><div class="maintenance-buttons"><button type="button" data-action="backup">${t('Yedek al', 'Export backup')}</button><button type="button" data-action="restore">${t('Geri yükle', 'Restore')}</button><button type="button" data-action="csv">CSV</button></div><p class="microcopy">${t('Verilerin bu cihazda saklanır. Ayar değişikliklerinde ve çıkışta otomatik yedek alınır; son 14 yedek korunur.', 'Your data stays on this device. Settings changes and shutdown create backups; the last 14 are retained.')}</p><div class="version-row"><span>Cortexia Island <b>v${e(info.version)}</b></span><button type="button" data-action="update" data-update-button>${t('Güncelleme ara', 'Check updates')}</button></div><p class="microcopy" data-update-status></p></section><div class="settings-end"><span>Ctrl / ⌘ + Shift + I · ${t('göster / gizle', 'show / hide')}</span><button type="button" data-action="hide">${t('Gizle', 'Hide')}</button><button type="button" data-action="quit">${t('Çıkış', 'Quit')}</button></div></form></main>`;
+    )}</div></section><section><div class="section-title">${icon('bolt')}<h2>${t('ENERJİ & ELEKTRİK', 'ENERGY & ELECTRICITY')}</h2></div><div class="form-grid"><label>${t('Güç kaynağı', 'Power source')}<select name="powerMode"><option value="estimate" ${settings.powerMode === 'estimate' ? 'selected' : ''}>${t('Yük profili · tahmin', 'Load profile · estimate')}</option><option value="shelly" ${settings.powerMode === 'shelly' ? 'selected' : ''}>Shelly Gen2/Gen3 · ${t('ölçüm', 'meter')}</option></select></label><label>${t('Güç ölçer yerel IP', 'Power meter local IP')}<input name="meterHost" value="${e(settings.meterHost)}" placeholder="192.168.1.50" maxlength="15"></label><label>${t('Boşta güç (W)', 'Idle power (W)')}<input name="idleWatts" type="number" min="0" max="10000" step="1" value="${settings.idleWatts}"></label><label>${t('Yoğun yük (W)', 'Full load (W)')}<input name="maxWatts" type="number" min="0" max="20000" step="1" value="${settings.maxWatts}"></label><div class="automatic-price"><span>${t('Otomatik elektrik tarifesi', 'Automatic electricity tariff')}</span><strong>${settings.tariff === null ? t('Şehir / ilçe ile kurulacak', 'Set up with city / district') : money(settings.tariff) + ' / kWh'}</strong></div></div><p class="microcopy">${t('Yük profili priz ölçümü değildir; GPU, ekran ve PSU kayıpları ayrıca değişebilir. Varsayılan 65–350 W profilini cihazına göre ayarla. Shelly, yalnızca PC’nin bağlı olduğu prizi ölçmelidir.', 'A load profile is not a wall measurement; GPU, monitor and PSU losses vary. Calibrate the default 65–350 W profile. Connect only the PC to the metered outlet.')}</p><p class="microcopy">${t('Tarife değişikliği sonraki örneklere uygulanır. Tüketim yalnızca açıkken takip edilir; bu tutar toplam ev faturası değildir.', 'Tariff changes apply to future samples. Only running time is tracked; this is not your total household bill.')}</p></section><section><div class="section-title">${icon('wifi')}<h2>${t('BAĞLANTI', 'CONNECTION')}</h2></div><div class="form-grid"><label>${t('Ağ adaptörü', 'Network adapter')}<select name="networkInterface"><option value="auto">${t('Otomatik · varsayılan rota', 'Automatic · default route')}</option>${(snapshot?.network.interfaces ?? []).map((n) => `<option value="${e(n.id)}" ${n.id === settings.networkInterface ? 'selected' : ''}>${e(n.name)}</option>`).join('')}</select></label><label>${t('Ping hedefi', 'Ping target')}<input name="pingHost" value="${e(settings.pingHost)}" maxlength="253" required></label></div><p class="microcopy">${t('Hızlar adaptördeki mevcut trafiktir. İnternet paketinin azami hızını ölçen bir speedtest değildir. Ping seçili hedefi kontrol eder; engellenen ICMP yanıtları bağlantı sorunu gibi görünebilir.', 'Rates show current adapter traffic, not your plan’s maximum speed. Ping checks the selected target; blocked ICMP replies can appear as a connectivity issue.')}</p></section><section><div class="section-title">${icon('gear')}<h2>${t('GÖRÜNÜM & DAVRANIŞ', 'APPEARANCE & BEHAVIOR')}</h2></div><div class="form-grid"><label>${t('Dil', 'Language')}<select name="language"><option value="tr" ${settings.language === 'tr' ? 'selected' : ''}>Türkçe</option><option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option></select></label><label>${t('Ekran', 'Display')}<select name="displayId"><option value="auto">${t('Birincil ekran', 'Primary display')}</option>${info.displays.map((d) => `<option value="${d.id}" ${d.id === settings.displayId ? 'selected' : ''}>${e(d.label)}</option>`).join('')}</select></label><label>${t('Üst boşluk (px)', 'Top offset (px)')}<input name="topOffset" type="number" min="0" max="300" value="${settings.topOffset}"></label></div><div class="check-options"><label><input type="checkbox" name="alwaysOnTop" ${settings.alwaysOnTop ? 'checked' : ''}>${t('Diğer pencerelerin üzerinde tut', 'Keep on top')}</label><label><input type="checkbox" name="launchAtLogin" ${settings.launchAtLogin ? 'checked' : ''}>${t('Oturum açıldığında başlat', 'Launch at login')}</label><label><input type="checkbox" name="reducedMotion" ${settings.reducedMotion ? 'checked' : ''}>${t('Hareketleri azalt', 'Reduce motion')}</label></div></section><div class="form-feedback" role="status" data-feedback></div><button class="primary-button" type="submit">${t('Değişiklikleri kaydet', 'Save changes')}</button><section class="maintenance"><div class="section-title">${icon('shield')}<h2>${t('YEDEK & GÜNCELLEME', 'BACKUP & UPDATE')}</h2></div><div class="maintenance-buttons"><button type="button" data-action="backup">${t('Yedek al', 'Export backup')}</button><button type="button" data-action="restore">${t('Geri yükle', 'Restore')}</button><button type="button" data-action="csv">CSV</button></div><p class="microcopy">${t('Verilerin bu cihazda saklanır. Ayar değişikliklerinde ve çıkışta otomatik yedek alınır; son 14 yedek korunur.', 'Your data stays on this device. Settings changes and shutdown create backups; the last 14 are retained.')}</p><div class="version-row"><span>Cortexia Island <b>v${e(info.version)}</b></span><button type="button" data-action="update" data-update-button>${t('Güncelleme ara', 'Check updates')}</button></div><p class="microcopy" data-update-status></p></section><div class="settings-end"><span>Ctrl / ⌘ + Shift + I · ${t('göster / gizle', 'show / hide')}</span><button type="button" data-action="hide">${t('Gizle', 'Hide')}</button><button type="button" data-action="quit">${t('Çıkış', 'Quit')}</button></div></form></main>`;
 }
 const downHistory: number[] = [];
 const upHistory: number[] = [];
@@ -307,9 +412,39 @@ function paint() {
         : money(0),
   );
   const unpriced = Math.max(0, day.estimatedWh + day.measuredWh - day.pricedWh);
+  const electrical = p.source === 'meter' && p.available ? p.electrical : undefined;
+  const protectionNames: Record<string, string> = {
+    overtemp: t('Yüksek sıcaklık', 'Overtemperature'),
+    overpower: t('Güç sınırı', 'Overpower'),
+    overvoltage: t('Yüksek voltaj', 'Overvoltage'),
+    undervoltage: t('Düşük voltaj', 'Undervoltage'),
+    overcurrent: t('Yüksek akım', 'Overcurrent'),
+  };
+  setText(
+    'health',
+    !electrical
+      ? t('Ölçer bağlı değil · veri yok', 'No meter reading available')
+      : electrical.errors.length
+        ? electrical.errors.map((code) => protectionNames[code] ?? code).join(' · ')
+        : t('Ölçer koruma uyarısı bildirmiyor', 'Meter reports no protection alerts'),
+  );
+  for (const key of ['voltage', 'current', 'frequency', 'temperature', 'powerFactor'] as const)
+    setText(key, fmt(electrical?.[key], key === 'current' || key === 'powerFactor' ? 2 : 1));
+  setText(
+    'average-power',
+    day.trackedSeconds > 0
+      ? `${fmt(((day.estimatedWh + day.measuredWh) * 3600) / day.trackedSeconds, 1)} W`
+      : '—',
+  );
+  setText(
+    'projection',
+    p.available && p.watts !== null
+      ? `${fmt(p.watts / 10, 2)} kWh${settings.tariff !== null ? ' · ' + money((p.watts / 10) * settings.tariff) : ''}`
+      : '—',
+  );
   setText(
     'tracked',
-    `${t('Takip', 'Tracked')} ${fmt(day.trackedSeconds / 3600, 2)} ${t('sa', 'h')}${unpriced > 0.1 ? ` · ${fmt(unpriced / 1000, 3)} kWh ${t('fiyatlandırılmadı', 'unpriced')}` : ''}`,
+    `${t('Takip', 'Tracked')} ${fmt(day.trackedSeconds / 3600, 2)} ${t('sa', 'h')}${settings.electricity.source === 'epdk' ? ' · ' + t('Standart tarife tahmini', 'Standard tariff estimate') : ''}${unpriced > 0.1 ? ` · ${fmt(unpriced / 1000, 3)} kWh ${t('fiyatlandırılmadı', 'unpriced')}` : ''}`,
   );
   const status = {
     online: t('Hedef erişilebilir', 'Target reachable'),
@@ -413,6 +548,12 @@ function insertPersonalization() {
   root
     .querySelector('.check-options')
     ?.insertAdjacentHTML(
+      'beforebegin',
+      `<div class="form-grid"><label>${t('Küçültülmüş görünüm', 'Collapsed appearance')}<select name="compactMode">${(['auto', 'metrics', 'droplet'] as const).map((mode) => `<option value="${mode}" ${mode === settings.compactMode ? 'selected' : ''}>${mode === 'auto' ? t('Otomatik · Mac damla / Windows veri', 'Automatic · Mac droplet / Windows metrics') : mode === 'droplet' ? t('Damla', 'Droplet') : t('Ortalanmış veriler', 'Centered metrics')}</option>`).join('')}</select></label></div>${info.platform === 'win32' ? `<section class="taskbar-settings"><h2>${t('GÖREV ÇUBUĞU · CANLI GÖSTERGE', 'TASKBAR · LIVE INDICATOR')}</h2><label class="clickthrough-option"><input type="checkbox" name="taskbarEnabled" ${settings.taskbar.enabled ? 'checked' : ''}>${t('Sol alt görev çubuğunda göster', 'Show in the lower left taskbar area')}</label><p class="microcopy">${t('Bir veya iki veri seç. Cortexia bağımsız bir gösterge açar; Windows hava durumu düğmesini değiştirmez. Gizlenebilir. Otomatik gizlenen görev çubuğunda görünmez.', 'Select one or two metrics. Cortexia opens an independent indicator; it does not replace the Windows weather button. You can hide it. It stays hidden with an auto-hiding taskbar.')}</p><div class="taskbar-options">${(Object.keys(taskbarLabels) as TaskbarMetric[]).map((metric) => `<label><input type="checkbox" name="taskbarMetric" value="${metric}" ${settings.taskbar.metrics.includes(metric) ? 'checked' : ''}>${t(...taskbarLabels[metric])}</label>`).join('')}</div></section>` : ''}`,
+    );
+  root
+    .querySelector('.check-options')
+    ?.insertAdjacentHTML(
       'beforeend',
       `<label><input type="checkbox" name="snapToEdge" ${settings.snapToEdge ? 'checked' : ''}>${t('Üst kenara yaklaşınca birleştir · tüm monitörlerde', 'Snap to the top edge · on any display')}</label>`,
     );
@@ -458,8 +599,8 @@ async function action(name: string) {
         const result = await api!.findTariff({
           city: String(data.get('tariffCity')),
           district: String(data.get('tariffDistrict')),
-          subscription: data.get('tariffSubscription') as 'residential' | 'other',
-          tier: data.get('tariffTier') as 'low' | 'high',
+          subscription: 'residential',
+          tier: 'low',
         });
         settings = result.settings;
         render();
@@ -531,14 +672,14 @@ async function action(name: string) {
 }
 function tariffSetupHtml() {
   const p = settings.electricity;
-  return `<section class="tariff-setup"><div class="section-title">${icon('bolt')}<h2>${t('ELEKTRİK TARİFENİ BULALIM', 'FIND YOUR ELECTRICITY TARIFF')}</h2></div><p class="section-intro">${t('Şehir ve semtini seç. Desteklenen mesken tarifesini EPDK’dan çevrimiçi bulup uygulayalım.', 'Choose your city and district. We will retrieve and apply a supported residential tariff from EPDK.')}</p><div class="form-grid"><label>${t('Şehir · Türkiye', 'City · Türkiye')}<select name="tariffCity"><option value="">${t('Şehir seç', 'Choose city')}</option>${[
+  return `<section class="tariff-setup"><div class="section-title">${icon('bolt')}<h2>${t('ELEKTRİK TARİFENİ BULALIM', 'FIND YOUR ELECTRICITY TARIFF')}</h2></div><p class="section-intro">${t('Sadece şehir ve ilçeni gir. Resmî standart mesken tarifesini çevrimiçi bulup uygulayalım.', 'Enter only your city and district. We will retrieve and apply the official standard residential tariff online.')}</p><div class="form-grid"><label>${t('Şehir · Türkiye', 'City · Türkiye')}<select name="tariffCity"><option value="">${t('Şehir seç', 'Choose city')}</option>${[
     ...TURKEY_CITIES,
   ]
     .sort((a, b) => a.localeCompare(b, 'tr'))
     .map((c) => `<option ${c === p.city ? 'selected' : ''}>${e(c)}</option>`)
     .join(
       '',
-    )}</select></label><label>${t('İlçe / semt', 'District / neighborhood')}<input name="tariffDistrict" maxlength="60" value="${e(p.district)}" placeholder="${t('İlçe veya semt adı', 'District or neighborhood')}"></label><label>${t('Abonelik', 'Subscription')}<select name="tariffSubscription"><option value="residential" ${p.subscription === 'residential' ? 'selected' : ''}>${t('Mesken · ulusal · tek zamanlı', 'Residential · national · single rate')}</option><option value="other" ${p.subscription === 'other' ? 'selected' : ''}>${t('SKTT / özel / ticari / çok zamanlı', 'Special / commercial / time of use')}</option></select></label><label>${t('Ev tüketimi kademesi', 'Household consumption tier')}<select name="tariffTier"><option value="low" ${p.tier === 'low' ? 'selected' : ''}>${t('Düşük · günlük 8 kWh ve altı', 'Low · up to 8 kWh per day')}</option><option value="high" ${p.tier === 'high' ? 'selected' : ''}>${t('Yüksek · 8 kWh üstü bölüm', 'High · portion above 8 kWh')}</option></select></label></div><p class="microcopy">${t('Kademe tüm evin tüketimi içindir. Şehir/semt cihazında kalır; ulusal fiyat şehre göre değişmez. Özel aboneliklerde faturandaki fiyatı kullan.', 'The tier concerns your whole household. Location stays local; the national price does not vary by city. Use your invoice for special subscriptions.')}</p><button type="button" class="primary-button" data-action="find-tariff">${t('Çevrimiçi bul ve uygula', 'Find online and apply')}</button><p class="microcopy" data-tariff-status role="status">${p.source === 'epdk' ? e(t('EPDK · Vergiler dahil · Geçerli: ', 'EPDK · Taxes included · Effective: ') + p.effectiveDate + ' · ' + t('Kontrol: ', 'Checked: ') + new Date(p.checkedAt!).toLocaleDateString(settings.language)) : t('Kaynak, geçerlilik tarihi ve vergi dahil fiyat gösterilir.', 'Source, effective date and tax-inclusive price will be shown.')}</p><button type="button" class="subtle-button" data-action="skip-tariff">${t('Şimdilik geç', 'Skip for now')}</button></section>`;
+    )}</select></label><label>${t('İlçe', 'District')}<input name="tariffDistrict" maxlength="60" value="${e(p.district)}" placeholder="${t('İlçe adı', 'District name')}"></label></div><p class="microcopy">${t('Şehir/ilçe cihazında kalır. Ulusal mesken düşük kademe tarifesi kullanılır; evindeki sözleşme ve toplam tüketim bilinmediği için maliyet standart tarife tahminidir.', 'Location stays local. The national residential lower tier is used; without your household contract and total consumption, cost is a standard-tariff estimate.')}</p><button type="button" class="primary-button" data-action="find-tariff">${t('Tarifeyi otomatik bul ve uygula', 'Find and apply tariff automatically')}</button><p class="microcopy" data-tariff-status role="status">${p.source === 'epdk' ? e('EPDK · ' + money(settings.tariff!) + ' / kWh · ' + t('Vergiler dahil · Geçerli: ', 'Taxes included · Effective: ') + p.effectiveDate + ' · ' + t('Kontrol: ', 'Checked: ') + new Date(p.checkedAt!).toLocaleDateString(settings.language)) : t('Birim fiyat girmen gerekmiyor. Kaynak ve geçerlilik tarihi otomatik gösterilir.', 'No unit price input needed. Source and effective date will appear automatically.')}</p><button type="button" class="subtle-button" data-action="skip-tariff">${t('Şimdilik geç', 'Skip for now')}</button></section>`;
 }
 function bindSettings() {
   const form = root.querySelector<HTMLFormElement>('#settings-form')!;
@@ -569,13 +710,21 @@ function bindSettings() {
         onboardingComplete: true,
       },
       widgets: data.getAll('widget') as WidgetId[],
+      compactMode: data.get('compactMode') as Settings['compactMode'],
+      taskbar:
+        info.platform === 'win32'
+          ? {
+              enabled: data.has('taskbarEnabled'),
+              metrics: data.getAll('taskbarMetric') as TaskbarMetric[],
+            }
+          : settings.taskbar,
       language: data.get('language') as Settings['language'],
-      currency: data.get('currency') as Settings['currency'],
+      currency: settings.currency,
       powerMode: data.get('powerMode') as Settings['powerMode'],
       meterHost: String(data.get('meterHost')).trim(),
       idleWatts: num('idleWatts'),
       maxWatts: num('maxWatts'),
-      tariff: data.get('tariff') === '' ? null : num('tariff'),
+      tariff: settings.tariff,
       networkInterface: String(data.get('networkInterface')),
       pingHost: String(data.get('pingHost')).trim(),
       topOffset: num('topOffset'),
@@ -589,6 +738,13 @@ function bindSettings() {
     };
     if (!next.widgets.length) {
       feedback(t('En az bir widget seç.', 'Choose at least one widget.'), true);
+      return;
+    }
+    if (next.taskbar.metrics.length < 1 || next.taskbar.metrics.length > 2) {
+      feedback(
+        t('Görev çubuğu için bir veya iki veri seç.', 'Choose one or two taskbar metrics.'),
+        true,
+      );
       return;
     }
     if (next.maxWatts < next.idleWatts) {
@@ -617,6 +773,31 @@ function bindSettings() {
   });
 }
 async function init() {
+  if (window.islandTaskbar) {
+    const taskApi = window.islandTaskbar;
+    root.className = 'taskbar-root';
+    const paintTaskbar = (state: Awaited<ReturnType<TaskbarAPI['getState']>>) => {
+      settings = state.settings;
+      const s = state.snapshot;
+      const metric = (id: TaskbarMetric) => {
+        if (!s) return '—';
+        if (id === 'cost')
+          return settings.tariff === null && s.today.pricedWh === 0
+            ? t('Tarife kur', 'Set tariff')
+            : money(s.today.cost);
+        if (id === 'energy') return fmt((s.today.estimatedWh + s.today.measuredWh) / 1000, 3);
+        if (id === 'power') return s.power.available ? fmt(s.power.watts, 1) : '—';
+        if (id === 'ping') return fmt(s.network.pingMs, 0);
+        const bps = id === 'down' ? s.network.downBps : s.network.upBps;
+        return fmt(bps === null ? null : (bps * 8) / 1e6, 1);
+      };
+      root.innerHTML = `<button class="taskbar-indicator" aria-label="Cortexia Island · ${t('Aç', 'Open')}" title="${t('Cortexia Island · açıkken takip edilen tüketim ve standart tarife tahmini', 'Cortexia Island · tracked energy and standard tariff estimate')}"><img src="${brandMark}" alt=""><span class="taskbar-readings">${settings.taskbar.metrics.map((id) => `<span><strong data-taskbar="${id}">${e(metric(id))}</strong><small>${e(t(...taskbarLabels[id]))}</small></span>`).join('')}</span>${state.preview ? '<span class="taskbar-demo">DEMO</span>' : '<i class="taskbar-live"></i>'}</button>`;
+      root.querySelector('button')?.addEventListener('click', () => void taskApi.showIsland());
+    };
+    paintTaskbar(await taskApi.getState());
+    taskApi.onState(paintTaskbar);
+    return;
+  }
   if (!api) {
     root.className = 'browser-preview';
     root.innerHTML = `<main class="preview-note"><span class="lens"></span><h1>Cortexia Island</h1><p>Canlı sistem verileri masaüstü uygulamasında görüntülenir.</p><p>Live system readings are available in the desktop application.</p><code>npm run dev</code></main>`;
@@ -658,6 +839,7 @@ async function init() {
     settings = next;
     if (view !== 'settings') render();
   });
+  api.onOpenExpanded(() => void switchView('expanded'));
   let passthrough = false;
   document.addEventListener('pointermove', (event) => {
     if (resizingPointer) return;

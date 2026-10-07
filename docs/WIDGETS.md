@@ -1,6 +1,6 @@
 # Adding a widget
 
-The first alpha has an allowlist of six built-in widgets. Users can enable, disable and reorder them. It does not load arbitrary executable plugins.
+The alpha has an allowlist of eight built-in widgets. Users can enable, disable and reorder them. It does not load arbitrary executable plugins. Electrical health requires actual compatible meter fields; energy insights state their projection assumptions. The Windows taskbar-area indicator selects one or two metrics from the same live snapshot, without renderer access to the OS shell.
 
 1. Add the ID and snapshot contract to `shared/types.ts`.
 2. Add the ID to `WIDGETS` in `main/core.ts`; retain backup compatibility and provide defaults for optional new fields.

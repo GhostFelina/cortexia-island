@@ -1,21 +1,19 @@
-# Cortexia Island 0.1.0-alpha.5
+# Cortexia Island 0.1.0-alpha.6
 
-An original OLED black island focused on PC electricity and estimated cost, with optional Shelly outlet readings, network health and six configurable widgets.
+Electricity-first OLED black island with centered compact readings and eight selectable widgets.
 
-Alpha.5 centers compact content between symmetric end controls, refines numerical alignment and restrained material detail, and tests centering/no overflow. Includes the alpha.4 electricity-first source changes below.
+- **Location-only setup:** enter just a Turkish city and district. EPDK supplies the current standard residential lower-tier tariff with reviewed 2026 taxes. No unit price, subscription or tier input. Source and dates stay visible; location stays local. This is a standard-tariff estimate, not the verified household contract or invoice.
+- **Windows live taskbar indicator:** an independent lower-left overlay displays one or two chosen metrics: estimated cost, tracked kWh, watts, download, upload or ping. Click to open; disable in Settings. This does not replace Microsoft's weather button. Auto-hidden or non-bottom taskbars do not show it.
+- **Mac droplet:** compact mode defaults to a droplet on macOS, with click-open, elastic pull-open and a native drag grip. Reduced motion supported. Forced droplet interaction was tested on Windows; real MacBook validation remains pending.
+- **Electrical health:** compatible Shelly meter voltage, current, frequency, meter temperature, power factor and protection reports. Unsupported fields remain blank; no grid or PSU safety diagnosis.
+- **Energy insights:** tracked average power and explicitly constant-power 100-hour projections, plus understandable energy facts.
 
-Alpha.4 puts today's estimated cost first in compact and expanded views. Tracked kWh, instantaneous watts and the hourly estimate at current power complete the electricity story. Missing tariffs lead to a clear setup action; historical unpriced consumption stays unpriced. Network traffic becomes a secondary panel. Typography, spacing, material restraint and bundled Lucide icons refine the visual hierarchy. Smoke tests cover cost math on screen and the tariff setup journey.
+Retains free movement across monitors, edge attachment, corner resizing of metric/detail views, hide/opacity/click-through, tray/Dock icons, 14 local backups, validated restore, CSV export, explicit updates and Turkish/English UI.
 
-First launch now asks for city/district and subscription/tier. The supported Turkish national single-rate residential tariff is read directly from EPDK's latest effective XLSX and applied with reviewed 2026 taxes. Price, source, effective date and check date are visible. Location stays local. Unsupported SKTT/special/commercial/time-of-use plans use the invoice price. Failed or malformed responses never replace a configured tariff. Tax rules expire after 2026 pending review; see TARIFFS.md.
+Verified locally: strict type/build checks, 15 unit tests, two-display Windows native smoke, taskbar selection/hide/open, droplet stretch/release, missing/meter electrical presentation, location-only setup and actual online EPDK application. GitHub runs quality and packaging for Windows x64 and both Mac architectures.
 
-Alpha.3 refines the compact view into a thin notch with concave top shoulders and stacked readings. Drag the grip/brand to any monitor; optional top-edge snapping works on each screen and switches back to a floating capsule away from the edge. Geometry tests cover negative/vertical monitor coordinates and removal; local Windows smoke exercises both connected displays. The app opens compact by default.
+**Measurement:** power defaults to a model, not a wall reading. Only running/tracked time is accumulated. Network traffic is not a speed test. Cost is a PC standard-tariff estimate, not a household bill.
 
-Includes local automatic backups, validated restore, CSV export, tray/shortcut controls, Turkish/English UI, reduced motion, strict TypeScript, tested energy math, desktop smoke tests and versioned Windows/macOS packages.
+**Alpha limits:** unsigned packages, Apple notarization and signed updates pending. Shelly supports local unauthenticated single-channel RPC; real meter/MacBook/notebook validation remains pending. Tax rules expire after 2026 until reviewed.
 
-Includes edge attachment, header dragging, four-corner resizing, saved sizes, opacity, click-through recovery and taskbar/Dock icons. The alpha.1 publish run caught diagnostic YAML in update metadata; alpha.2 fixes and tests the release filter and explicitly selects the alpha channel.
-
-**Measurement:** current network traffic is not a speed test. Default power is a model, not a wall reading. Consumption covers tracked time only. Enter your own electricity tariff; this is a PC cost estimate, not a household bill.
-
-**Alpha limits:** packages are unsigned; signing/notarization is planned. macOS updater installation requires signed releases; use DMG packages for now. Shelly supports local, unauthenticated single-channel Gen2/Gen3 RPC. Real MacBook and notebook verification remains to be completed.
-
-Windows: x64 `.exe`. macOS: arm64 for Apple Silicon; x64 for Intel. SHA256 manifests are provided. Use Ctrl/⌘+Shift+I to show/hide the island and Settings to configure your widgets.
+Windows x64 `.exe`; Apple Silicon arm64 and Intel x64 `.dmg`/`.zip`; SHA256 manifests included.

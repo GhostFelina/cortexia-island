@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IslandAPI, Settings, Snapshot, UpdateStatus, View } from '../shared/types';
 const api: IslandAPI = {
+  onOpenExpanded: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('window:open-expanded', listener);
+    return () => ipcRenderer.removeListener('window:open-expanded', listener);
+  },
   findTariff: (request) => ipcRenderer.invoke('tariff:find', request),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings: Settings) => ipcRenderer.invoke('settings:save', settings),

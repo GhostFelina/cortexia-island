@@ -1,5 +1,36 @@
-import type { Settings, WidgetId, DayEnergy, StoreData } from '../shared/types';
-export const WIDGETS: WidgetId[] = ['network', 'power', 'energy', 'system', 'battery', 'clock'];
+import type { Settings, WidgetId, DayEnergy, StoreData, PowerSample } from '../shared/types';
+export function parseElectricalStatus(input: unknown): NonNullable<PowerSample['electrical']> {
+  const d = input as Record<string, unknown>;
+  const value = (n: unknown, min: number, max: number) =>
+    typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max ? n : null;
+  const temp = d?.temperature as { tC?: unknown } | undefined;
+  return {
+    voltage: value(d?.voltage, 0, 1000),
+    current: value(d?.current, 0, 1000),
+    frequency: value(d?.freq, 0, 100),
+    temperature: value(temp?.tC, -50, 200),
+    powerFactor: value(d?.pf, -1, 1),
+    errors: Array.isArray(d?.errors)
+      ? d.errors
+          .filter(
+            (e): e is string =>
+              typeof e === 'string' &&
+              ['overtemp', 'overpower', 'overvoltage', 'undervoltage', 'overcurrent'].includes(e),
+          )
+          .slice(0, 5)
+      : [],
+  };
+}
+export const WIDGETS: WidgetId[] = [
+  'network',
+  'power',
+  'energy',
+  'system',
+  'battery',
+  'clock',
+  'health',
+  'insights',
+];
 type Area = { x: number; y: number; width: number; height: number };
 export function locateDisplay<T extends { id: number; workArea: Area }>(
   displays: T[],
@@ -26,6 +57,8 @@ export function locateDisplay<T extends { id: number; workArea: Area }>(
   );
 }
 export const DEFAULT_SETTINGS: Settings = {
+  compactMode: 'auto',
+  taskbar: { enabled: true, metrics: ['cost', 'energy'] },
   language: 'tr',
   widgets: ['energy', 'power', 'network'],
   tariff: null,
@@ -105,6 +138,18 @@ export function validateSettings(input: unknown): Settings {
     s.widgets.some((id) => !WIDGETS.includes(id))
   )
     throw new Error('Invalid widgets');
+  s.compactMode ??= 'auto';
+  s.taskbar ??= structuredClone(DEFAULT_SETTINGS.taskbar);
+  if (
+    !['auto', 'metrics', 'droplet'].includes(s.compactMode) ||
+    typeof s.taskbar?.enabled !== 'boolean' ||
+    !Array.isArray(s.taskbar.metrics) ||
+    s.taskbar.metrics.length < 1 ||
+    s.taskbar.metrics.length > 2 ||
+    new Set(s.taskbar.metrics).size !== s.taskbar.metrics.length ||
+    s.taskbar.metrics.some((m) => !['cost', 'energy', 'power', 'down', 'up', 'ping'].includes(m))
+  )
+    throw new Error('Invalid taskbar preferences');
   if (s.tariff !== null) numberInRange(s.tariff, 0, 10000, 'tariff');
   s.electricity ??= structuredClone(DEFAULT_SETTINGS.electricity);
   const electricity = s.electricity;
@@ -154,6 +199,8 @@ export function validateSettings(input: unknown): Settings {
     numberInRange(s.position.y, -100000, 100000, 'position.y');
   }
   return {
+    compactMode: s.compactMode,
+    taskbar: structuredClone(s.taskbar),
     language: s.language,
     widgets: [...s.widgets],
     tariff: s.tariff,

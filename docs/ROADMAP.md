@@ -9,7 +9,7 @@
 - [x] Live network counters, probe latency and quality
 - [x] Explicit power estimate + Shelly outlet provider
 - [x] Energy history, prospective tariff and CSV
-- [x] Six selectable/reorderable widgets
+- [x] Eight selectable/reorderable widgets
 - [x] Local backups, restore validation and recovery
 - [x] Versioned Windows/macOS packaging and release automation
 - [x] User requested update check/download/install flow
@@ -29,7 +29,7 @@
 
 - [x] Alpha.3: thinner compact composition, stacked readings, notch shoulders, free cross-display dragging and optional edge attachment. Verified on both connected Windows monitors.
 
-- [ ] Refine the island and its data presentation: typography, number alignment, spacing, compact composition, mini charts and restrained material/lighting detail. Preserve readability and true black surfaces. The owner asked to queue this after the first working release.
+- [x] Alpha.4–6 refine the island and its data presentation: typography, number alignment, spacing, compact composition, mini charts and restrained material/lighting detail. Preserve readability and true black surfaces. The owner asked to queue this after the first working release.
 
 ## Next widgets — user guided
 

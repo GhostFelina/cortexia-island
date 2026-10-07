@@ -1,7 +1,7 @@
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import si from 'systeminformation';
-import { emptyDay, estimateWatts, integrateEnergy, localDate } from './core';
+import { emptyDay, estimateWatts, integrateEnergy, localDate, parseElectricalStatus } from './core';
 import type { DataStore } from './store';
 import type { Snapshot, NetworkSample, PowerSample } from '../shared/types';
 function cpuTimes() {
@@ -95,7 +95,7 @@ export class Telemetry {
       const watts = data.apower;
       if (typeof watts !== 'number' || !Number.isFinite(watts) || watts < 0 || watts > 20000)
         throw new Error('Invalid meter watts');
-      return { watts, source: 'meter', available: true };
+      return { watts, source: 'meter', available: true, electrical: parseElectricalStatus(data) };
     } catch {
       return { watts: null, source: 'meter', available: false };
     }

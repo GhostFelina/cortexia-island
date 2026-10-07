@@ -14,6 +14,7 @@ import {
 import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
 import fs from 'node:fs';
+import { execFile } from 'node:child_process';
 import { DataStore } from './store';
 import { Telemetry } from './telemetry';
 import { findOnlineTariff, validateTariffRequest } from './tariff';
@@ -36,6 +37,8 @@ if (!lock) {
   app.quit();
 } else {
   let win: BrowserWindow;
+  let taskbarWin: BrowserWindow | undefined;
+  let taskbarAlignmentSupported = true;
   let tray: Tray;
   let store: DataStore;
   let telemetry: Telemetry;
@@ -55,7 +58,11 @@ if (!lock) {
   function position() {
     const displays = screen.getAllDisplays();
     const saved = store.data.settings.position;
-    const size = store.data.settings.sizes[view];
+    const droplet =
+      view === 'compact' &&
+      (store.data.settings.compactMode === 'droplet' ||
+        (store.data.settings.compactMode === 'auto' && process.platform === 'darwin'));
+    const size = droplet ? { width: 88, height: 84 } : store.data.settings.sizes[view];
     const display = locateDisplay(
       displays,
       saved
@@ -97,6 +104,7 @@ if (!lock) {
   }
   function emitSettings() {
     win.webContents.send('settings:changed', store.data.settings);
+    publishTaskbar();
   }
   function applySettings() {
     win.setAlwaysOnTop(store.data.settings.alwaysOnTop, 'floating');
@@ -105,6 +113,122 @@ if (!lock) {
     if (app.isPackaged && !smoke)
       app.setLoginItemSettings({ openAtLogin: store.data.settings.launchAtLogin });
     position();
+    positionTaskbar();
+  }
+  function taskbarState() {
+    return {
+      settings: store.data.settings,
+      snapshot: smoke ? fixture() : (telemetry?.last ?? null),
+      preview: smoke,
+    };
+  }
+  function publishTaskbar() {
+    if (taskbarWin && !taskbarWin.isDestroyed())
+      taskbarWin.webContents.send('taskbar:state', taskbarState());
+    if (tray && telemetry?.last) {
+      const s = telemetry.last;
+      tray.setToolTip(
+        `Cortexia Island · ${((s.today.estimatedWh + s.today.measuredWh) / 1000).toFixed(3)} kWh · ${store.data.settings.tariff === null ? 'Tarife kurulumu' : new Intl.NumberFormat(store.data.settings.language, { style: 'currency', currency: store.data.settings.currency }).format(s.today.cost)} · ${s.power.watts?.toFixed(1) ?? '—'} W`,
+      );
+      if (process.platform === 'darwin')
+        tray.setTitle(
+          store.data.settings.tariff === null
+            ? '—'
+            : new Intl.NumberFormat(store.data.settings.language, {
+                style: 'currency',
+                currency: store.data.settings.currency,
+              }).format(s.today.cost),
+        );
+    }
+  }
+  function positionTaskbar() {
+    if (!taskbarWin || taskbarWin.isDestroyed()) return;
+    const display = screen.getPrimaryDisplay();
+    const gap =
+      display.bounds.y + display.bounds.height - display.workArea.y - display.workArea.height;
+    if (
+      process.platform !== 'win32' ||
+      !taskbarAlignmentSupported ||
+      display.bounds.width < 1024 ||
+      !store.data.settings.taskbar.enabled ||
+      gap < 28 ||
+      gap > 120
+    ) {
+      taskbarWin.hide();
+      return;
+    }
+    const height = Math.min(44, gap - 4);
+    taskbarWin.setBounds({
+      x: display.bounds.x + 8,
+      y: display.workArea.y + display.workArea.height + Math.round((gap - height) / 2),
+      width: 264,
+      height,
+    });
+    taskbarWin.setAlwaysOnTop(true, 'pop-up-menu');
+    taskbarWin.showInactive();
+    publishTaskbar();
+  }
+  async function createTaskbar() {
+    if (process.platform !== 'win32') return;
+    // Read only: do not cover Start when the owner uses left-aligned buttons.
+    const alignment = await new Promise<string>((resolve) =>
+      execFile(
+        'reg.exe',
+        [
+          'query',
+          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced',
+          '/v',
+          'TaskbarAl',
+        ],
+        { windowsHide: true, timeout: 3000 },
+        (_error, stdout) => resolve(stdout ?? ''),
+      ),
+    );
+    taskbarAlignmentSupported = !/TaskbarAl\s+REG_DWORD\s+0x0\b/i.test(alignment);
+    taskbarWin = new BrowserWindow({
+      width: 264,
+      height: 44,
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: '#00000000',
+      resizable: false,
+      focusable: false,
+      skipTaskbar: true,
+      hasShadow: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'taskbar-preload.js'),
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    taskbarWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    taskbarWin.webContents.on('will-navigate', (event) => event.preventDefault());
+    const auth = (event: Electron.IpcMainInvokeEvent) => {
+      if (
+        event.sender !== taskbarWin!.webContents ||
+        event.senderFrame !== taskbarWin!.webContents.mainFrame
+      )
+        throw new Error('Untrusted taskbar sender');
+    };
+    ipcMain.handle('taskbar:state', (event) => {
+      auth(event);
+      return taskbarState();
+    });
+    ipcMain.handle('taskbar:show', (event) => {
+      auth(event);
+      view = 'expanded';
+      win.webContents.send('window:open-expanded');
+      reveal();
+    });
+    if (process.env.ISLAND_DEV_URL && !app.isPackaged)
+      await taskbarWin.loadURL(process.env.ISLAND_DEV_URL + '#taskbar');
+    else await taskbarWin.loadFile(path.join(root, 'dist', 'index.html'), { hash: 'taskbar' });
+    positionTaskbar();
+    screen.on('display-metrics-changed', positionTaskbar);
+    screen.on('display-added', positionTaskbar);
+    screen.on('display-removed', positionTaskbar);
   }
   function reveal() {
     store.data.settings.clickThrough = false;
@@ -176,7 +300,7 @@ if (!lock) {
     if (smoke)
       store.data = {
         schemaVersion: 1,
-        settings: { ...structuredClone(DEFAULT_SETTINGS), tariff: 3.4 },
+        settings: { ...structuredClone(DEFAULT_SETTINGS), compactMode: 'metrics', tariff: 3.4 },
         days: [],
       };
     store.backup();
@@ -211,7 +335,11 @@ if (!lock) {
       if (tariffBusy) throw new Error('Tarife sorgusu zaten sürüyor.');
       if (store.data.settings.currency !== 'TRY' && store.data.days.some((d) => d.pricedWh > 0))
         throw new Error('Fiyatlandırılmış geçmişin para birimi TRY değil. Manuel fiyat kullan.');
-      const request = validateTariffRequest(input);
+      const request = validateTariffRequest({
+        ...(input as object),
+        subscription: 'residential',
+        tier: 'low',
+      });
       tariffBusy = true;
       try {
         const quote = await findOnlineTariff(request);
@@ -491,10 +619,7 @@ if (!lock) {
     telemetry = new Telemetry(store, (sample) => {
       if (!win.isDestroyed()) {
         win.webContents.send('telemetry:snapshot', sample);
-        const n = sample.network;
-        tray.setToolTip(
-          `Cortexia Island · ↓ ${(((n.downBps ?? 0) * 8) / 1e6).toFixed(1)} Mbps · ${sample.power.watts?.toFixed(0) ?? '—'} W`,
-        );
+        publishTaskbar();
         liveSamples++;
         if (captureLive && liveSamples === 4)
           setTimeout(async () => {
@@ -520,6 +645,8 @@ if (!lock) {
     if (process.env.ISLAND_DEV_URL && !app.isPackaged)
       await win.loadURL(process.env.ISLAND_DEV_URL);
     else await win.loadFile(path.join(root, 'dist', 'index.html'));
+    await createTaskbar();
+    win.on('closed', () => app.quit());
     if (smoke) win.showInactive();
     else win.show();
     if (smoke) {
@@ -595,8 +722,15 @@ if (!lock) {
               JSON.stringify(result.quote, null, 2),
             );
           }
+          const manualTariffFields = await win.webContents.executeJavaScript(
+            `document.querySelectorAll('[name="tariff"],[name="tariffSubscription"],[name="tariffTier"],[name="currency"]').length`,
+          );
+          if (manualTariffFields) throw new Error('Tariff setup must ask only city and district');
           await win.webContents.executeJavaScript(
-            `document.querySelector('input[name="tariff"]').value='3.4';document.querySelector('#settings-form').requestSubmit()`,
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,tariff:3.4}))`,
+          );
+          await win.webContents.executeJavaScript(
+            `document.querySelector('#settings-form').requestSubmit()`,
           );
           await new Promise((resolve) => setTimeout(resolve, 180));
           if (store.data.settings.tariff !== 3.4)
@@ -651,6 +785,113 @@ if (!lock) {
           applySettings();
           emitSettings();
           const pause = () => new Promise((resolve) => setTimeout(resolve, 180));
+          if (taskbarWin) {
+            const bar = await taskbarWin.webContents.executeJavaScript(
+              `({api:!!window.islandTaskbar, metrics:[...document.querySelectorAll('[data-taskbar]')].map(e=>e.dataset.taskbar),errors:window.__islandErrors||[]})`,
+            );
+            if (!bar.api || bar.metrics.join(',') !== 'cost,energy' || bar.errors.length)
+              throw new Error('Taskbar renderer failed: ' + JSON.stringify(bar));
+            fs.writeFileSync(
+              path.join(artifact, 'taskbar.png'),
+              (await taskbarWin.webContents.capturePage()).toPNG(),
+            );
+            await win.webContents.executeJavaScript(
+              `window.island.getSettings().then(s=>window.island.saveSettings({...s,taskbar:{enabled:false,metrics:['power','ping']}}))`,
+            );
+            await pause();
+            if (taskbarWin.isVisible()) throw new Error('Taskbar hide failed');
+            const metrics = await taskbarWin.webContents.executeJavaScript(
+              `[...document.querySelectorAll('[data-taskbar]')].map(e=>e.dataset.taskbar).join(',')`,
+            );
+            if (metrics !== 'power,ping') throw new Error('Taskbar metric selection failed');
+            await taskbarWin.webContents.executeJavaScript(
+              `document.querySelector('button').click()`,
+            );
+            await pause();
+            if (!(await win.webContents.executeJavaScript(`!!document.querySelector('.expanded')`)))
+              throw new Error('Taskbar expand failed');
+            await win.webContents.executeJavaScript(
+              `window.island.getSettings().then(s=>window.island.saveSettings({...s,taskbar:{enabled:true,metrics:['cost','energy']}}))`,
+            );
+          }
+          await win.webContents.executeJavaScript(
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,compactMode:'droplet'}))`,
+          );
+          await win.webContents.executeJavaScript(
+            `document.querySelector('[data-action="compact"]').click()`,
+          );
+          await pause();
+          if (win.getBounds().width !== 88 || win.getBounds().height !== 84)
+            throw new Error('Droplet window size failed');
+          fs.writeFileSync(
+            path.join(artifact, 'droplet.png'),
+            (await win.webContents.capturePage()).toPNG(),
+          );
+          const dropRect = await win.webContents.executeJavaScript(
+            `(()=>{const r=document.querySelector('.droplet-control').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+8)};})()`,
+          );
+          win.webContents.sendInputEvent({
+            type: 'mouseDown',
+            ...dropRect,
+            button: 'left',
+            clickCount: 1,
+          });
+          win.webContents.sendInputEvent({ type: 'mouseMove', x: dropRect.x, y: dropRect.y + 40 });
+          await pause();
+          const stretch = await win.webContents.executeJavaScript(
+            `document.querySelector('.droplet-control').style.transform`,
+          );
+          if (!stretch.includes('scale')) throw new Error('Droplet elastic stretch failed');
+          win.webContents.sendInputEvent({
+            type: 'mouseUp',
+            x: dropRect.x,
+            y: dropRect.y + 40,
+            button: 'left',
+            clickCount: 1,
+          });
+          await pause();
+          if (!(await win.webContents.executeJavaScript(`!!document.querySelector('.expanded')`)))
+            throw new Error('Droplet pull-open failed');
+          await win.webContents.executeJavaScript(
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,widgets:['health','insights']}))`,
+          );
+          win.webContents.send('telemetry:snapshot', fixture());
+          await pause();
+          const noMeter = await win.webContents.executeJavaScript(
+            `document.querySelector('[data-value="health"]').textContent`,
+          );
+          if (!noMeter.includes('Ölçer bağlı değil'))
+            throw new Error('Missing electrical data must not be diagnosed');
+          const meterFixture = fixture();
+          meterFixture.power = {
+            source: 'meter',
+            available: true,
+            watts: 124.8,
+            electrical: {
+              voltage: 230.4,
+              current: 0.56,
+              frequency: 50,
+              temperature: 32,
+              powerFactor: 0.97,
+              errors: ['overvoltage'],
+            },
+          };
+          win.webContents.send('telemetry:snapshot', meterFixture);
+          await pause();
+          const meterUi = await win.webContents.executeJavaScript(
+            `({voltage:document.querySelector('[data-value="voltage"]').textContent,status:document.querySelector('[data-value="health"]').textContent})`,
+          );
+          if (meterUi.voltage !== '230,4' || !meterUi.status.includes('Yüksek voltaj'))
+            throw new Error('Electrical meter presentation failed');
+          fs.writeFileSync(
+            path.join(artifact, 'electrical-demo.png'),
+            (await win.webContents.capturePage()).toPNG(),
+          );
+          await win.webContents.executeJavaScript(
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,compactMode:'metrics',widgets:['energy','power','network']}))`,
+          );
+          win.webContents.send('telemetry:snapshot', fixture());
+          await pause();
           await win.webContents.executeJavaScript(
             `document.querySelector('[data-action="compact"]').click()`,
           );
@@ -678,7 +919,7 @@ if (!lock) {
           const widgetCount = await win.webContents.executeJavaScript(
             `document.querySelectorAll('input[name="widget"]').length`,
           );
-          if (widgetCount !== 6) throw new Error('Widget selector failed');
+          if (widgetCount !== 8) throw new Error('Widget selector failed');
           fs.writeFileSync(
             path.join(artifact, 'settings.png'),
             (await win.webContents.capturePage()).toPNG(),
@@ -751,6 +992,11 @@ if (!lock) {
                   'compact-centered-metrics',
                   'tariff-setup-focus',
                   'tariff-setup-persistence',
+                  'location-only-tariff-setup',
+                  'droplet-size-stretch-pull-open',
+                  'electrical-missing-data-and-meter-warning',
+                  'energy-insights',
+                  ...(taskbarWin ? ['taskbar-state-selection-hide-expand'] : []),
                 ],
                 ...state,
               },
@@ -794,5 +1040,6 @@ if (!lock) {
       store.backup();
     }
     tray?.destroy();
+    taskbarWin?.destroy();
   });
 }

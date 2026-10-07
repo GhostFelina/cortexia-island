@@ -7,7 +7,7 @@ Recorded 2026-10-07. Project: **Cortexia Island**. First target: the owner's Win
 - Understand the supplied X reference as a concept; use an original design rather than copy its appearance.
 - True black island with subtle texture and lighting; attached to the upper usable screen edge by default.
 - Live download/upload traffic, ping, jitter and reply loss.
-- Explicit PC power estimate; optional local Shelly outlet measurement. Daily energy and estimated cost from an owner-entered tariff.
+- Explicit PC power estimate; optional local Shelly outlet measurement. Daily energy and estimated cost; alpha.6 retrieves a standard residential tariff automatically from city/district-only setup.
 - A list to enable, disable and reorder widgets. Network, power, energy, CPU/RAM, battery and clock are included.
 - Header dragging, four mouse corner handles, saved positions and separate sizes for compact/expanded/settings views.
 - Full hide/show, opacity, click-through and recovery via tray or Ctrl/Command+Shift+I.
@@ -17,7 +17,10 @@ Recorded 2026-10-07. Project: **Cortexia Island**. First target: the owner's Win
 - Local backups/recovery/export, tests, manual update check/download/install and cross-platform package workflows.
 - Windows `.exe`; Apple Silicon and Intel Mac `.dmg` plus update `.zip` files.
 - Progress and actual local application previews shown to the owner.
-- Alpha.4: first-launch city/district and subscription/tier setup, direct EPDK online tariff lookup/application, source/date display and manual fallback for unsupported plans.
+- Alpha.4–6: direct EPDK online tariff lookup/application and source/date display. Alpha.6 asks only city/district and labels the automatic national lower-tier rate as a standard-tariff estimate.
+- Alpha.6: Windows independent live taskbar-area indicator with user-selected metrics; native weather replacement is not claimed.
+- Alpha.6: Mac default droplet with click-open and elastic pull-open; Windows can select it for preview. Real MacBook validation remains pending.
+- Alpha.6: electrical health reports from compatible meters and transparent energy insights; no simulated safety diagnosis.
 
 ## Next iteration, explicitly queued by the owner
 
@@ -26,6 +29,7 @@ Follow-up implemented in alpha.3: thinner compact notch, concave shoulder transi
 1. Continue visual refinement based on the owner's next feedback; the cost-first typography, spacing, compact stacks and restrained surfaces are implemented in alpha.4.
 2. Add the owner's next widget list when supplied. Do not assume a final list or execute arbitrary third-party code from a widget selector.
 3. Install and validate on the real MacBook and Windows notebook when available.
+4. Owner's next request, after completing the current release/install: live Codex and Claude 5-hour and weekly usage-limit bars. Investigate supported authenticated data sources, refresh cadence and missing/expired authorization handling. Do not invent percentages or reuse private credentials outside their intended app.
 
 ## External work before stable
 

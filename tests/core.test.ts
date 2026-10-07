@@ -15,9 +15,56 @@ import {
   localDate,
   emptyDay,
   locateDisplay,
+  parseElectricalStatus,
 } from '../main/core';
 import { DataStore } from '../main/store';
 import type { DayEnergy } from '../shared/types';
+test('electrical fields stay missing without meter values and reject nonfinite readings', () => {
+  assert.deepEqual(parseElectricalStatus(null), {
+    voltage: null,
+    current: null,
+    frequency: null,
+    temperature: null,
+    powerFactor: null,
+    errors: [],
+  });
+  const reading = parseElectricalStatus({
+    voltage: 230.4,
+    current: 0.56,
+    freq: 50,
+    temperature: { tC: 32 },
+    pf: 0.97,
+    errors: ['overvoltage', 'unknown'],
+  });
+  assert.equal(reading.voltage, 230.4);
+  assert.deepEqual(reading.errors, ['overvoltage']);
+  const invalid = parseElectricalStatus({
+    voltage: Infinity,
+    current: '0.5',
+    freq: NaN,
+    temperature: { tC: 999 },
+    pf: 3,
+  });
+  assert.deepEqual(invalid, parseElectricalStatus(null));
+});
+test('taskbar preferences are bounded and older settings migrate without shared references', () => {
+  const old = { ...DEFAULT_SETTINGS } as Partial<typeof DEFAULT_SETTINGS>;
+  delete old.compactMode;
+  delete old.taskbar;
+  const migrated = validateSettings(old);
+  assert.equal(migrated.compactMode, 'auto');
+  assert.deepEqual(migrated.taskbar.metrics, ['cost', 'energy']);
+  assert.notEqual(migrated.taskbar.metrics, DEFAULT_SETTINGS.taskbar.metrics);
+  for (const metrics of [[], ['cost', 'cost'], ['cost', 'power', 'ping'], ['unknown']])
+    assert.throws(() =>
+      validateSettings({ ...DEFAULT_SETTINGS, taskbar: { enabled: true, metrics } }),
+    );
+  assert.throws(() => validateSettings({ ...DEFAULT_SETTINGS, compactMode: 'invalid' }));
+  assert.deepEqual(
+    validateSettings({ ...DEFAULT_SETTINGS, widgets: ['health', 'insights'] }).widgets,
+    ['health', 'insights'],
+  );
+});
 test('valid settings are copied and unsafe probes are rejected', () => {
   const s = validateSettings(DEFAULT_SETTINGS);
   assert.notEqual(s.widgets, DEFAULT_SETTINGS.widgets);

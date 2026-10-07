@@ -1,4 +1,6 @@
-export type WidgetId = 'network' | 'power' | 'energy' | 'system' | 'battery' | 'clock';
+export type WidgetId =
+  'network' | 'power' | 'energy' | 'system' | 'battery' | 'clock' | 'health' | 'insights';
+export type TaskbarMetric = 'cost' | 'energy' | 'power' | 'down' | 'up' | 'ping';
 export type View = 'compact' | 'expanded' | 'settings';
 export interface ElectricityProfile {
   city: string;
@@ -27,6 +29,8 @@ export interface TariffQuote {
   documentUrl: string;
 }
 export interface Settings {
+  compactMode: 'auto' | 'metrics' | 'droplet';
+  taskbar: { enabled: boolean; metrics: TaskbarMetric[] };
   language: 'tr' | 'en';
   widgets: WidgetId[];
   tariff: number | null;
@@ -74,6 +78,14 @@ export interface NetworkSample {
   probe: string;
 }
 export interface PowerSample {
+  electrical?: {
+    voltage: number | null;
+    current: number | null;
+    frequency: number | null;
+    temperature: number | null;
+    powerFactor: number | null;
+    errors: string[];
+  };
   watts: number | null;
   source: 'estimate' | 'meter';
   available: boolean;
@@ -105,6 +117,7 @@ export interface AppInfo {
   preview: boolean;
 }
 export interface IslandAPI {
+  onOpenExpanded(callback: () => void): () => void;
   findTariff(request: TariffRequest): Promise<{ settings: Settings; quote: TariffQuote }>;
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<Settings>;
@@ -127,4 +140,11 @@ export interface IslandAPI {
   onSnapshot(callback: (snapshot: Snapshot) => void): () => void;
   onUpdate(callback: (status: UpdateStatus) => void): () => void;
   onSettings(callback: (settings: Settings) => void): () => void;
+}
+export interface TaskbarAPI {
+  getState(): Promise<{ settings: Settings; snapshot: Snapshot | null; preview: boolean }>;
+  onState(
+    callback: (state: { settings: Settings; snapshot: Snapshot | null; preview: boolean }) => void,
+  ): () => void;
+  showIsland(): Promise<void>;
 }
