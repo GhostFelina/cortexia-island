@@ -1,0 +1,90 @@
+{
+  "name": "cortexia-island",
+  "version": "0.1.0-alpha.1",
+  "description": "An OLED black desktop island for live network health, energy awareness and customizable widgets.",
+  "author": "GhostFelina",
+  "license": "MIT",
+  "main": "out/main/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GhostFelina/cortexia-island.git"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.cjs",
+    "dev:ui": "vite --host 127.0.0.1 --port 5371 --strictPort",
+    "build": "tsc -p tsconfig.main.json && vite build",
+    "start": "electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "tsc -p tsconfig.main.json && node --test out/tests/core.test.js",
+    "smoke": "npm run build && electron . --smoke",
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip --publish never",
+    "check": "npm run typecheck && npm test && npm run build",
+    "version": "node scripts/sync-version.cjs"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9",
+    "systeminformation": "5.33.15"
+  },
+  "devDependencies": {
+    "electron": "44.6.0",
+    "electron-builder": "26.15.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.3",
+    "@types/node": "^24.0.0",
+    "yaml": "2.9.1",
+    "prettier": "3.9.9"
+  },
+  "overrides": {
+    "global-agent": "4.1.3"
+  },
+  "build": {
+    "appId": "dev.ghostfelina.cortexiaisland",
+    "productName": "Cortexia Island",
+    "artifactName": "Cortexia-Island-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "out/main/**/*",
+      "dist/**/*",
+      "assets/*.png",
+      "package.json"
+    ],
+    "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "GhostFelina",
+        "repo": "cortexia-island",
+        "releaseType": "prerelease"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "assets/icon.png",
+      "hardenedRuntime": true
+    },
+    "dmg": {
+      "title": "Cortexia Island ${version}"
+    }
+  }
+}

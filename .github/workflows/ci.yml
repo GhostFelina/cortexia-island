@@ -1,0 +1,35 @@
+name: Quality
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run check
+      - run: npm audit --audit-level=moderate
+      - name: Desktop smoke
+        if: runner.os != 'Linux'
+        run: npm run smoke
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: diagnostics-${{ matrix.os }}
+          path: .artifacts/
+          retention-days: 7

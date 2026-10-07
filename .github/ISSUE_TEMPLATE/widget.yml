@@ -1,0 +1,15 @@
+name: Widget idea
+description: Propose a widget or provider
+labels: [enhancement, widget]
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What would you like to see on your island?
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: Where can the data come from?
+      description: Note the supported OS and any permissions or hardware needed.
