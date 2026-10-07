@@ -27,7 +27,7 @@ jobs:
       - name: Desktop smoke
         if: runner.os != 'Linux'
         run: npm run smoke
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: diagnostics-${{ matrix.os }}
