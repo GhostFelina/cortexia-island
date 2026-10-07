@@ -507,9 +507,8 @@ footer {
   padding: 8px 16px;
 }
 .compact {
-  height: 58px;
-  max-width: 360px;
-  margin: auto;
+  height: 100%;
+  width: 100%;
   border-radius: 30px;
   flex-direction: row;
   align-items: center;

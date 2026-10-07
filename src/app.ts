@@ -19,6 +19,7 @@ window.__islandErrors = [];
 window.addEventListener('error', (e) => window.__islandErrors?.push(e.message));
 window.addEventListener('unhandledrejection', (e) => window.__islandErrors?.push(String(e.reason)));
 const api = window.island;
+let resizingPointer = false;
 const root = document.querySelector<HTMLDivElement>('#app')!;
 let settings: Settings;
 let snapshot: Snapshot | null = null;
@@ -176,6 +177,7 @@ function render() {
     handle.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
+      resizingPointer = true;
       handle.setPointerCapture(event.pointerId);
       void api?.resize(corner, 'start');
     });
@@ -185,6 +187,7 @@ function render() {
     const finish = (event: PointerEvent) => {
       if (handle.hasPointerCapture(event.pointerId)) {
         handle.releasePointerCapture(event.pointerId);
+        resizingPointer = false;
         void api?.resize(corner, 'end');
       }
     };
@@ -529,6 +532,7 @@ async function init() {
   });
   let passthrough = false;
   document.addEventListener('pointermove', (event) => {
+    if (resizingPointer) return;
     const ignore = !(event.target instanceof Element && event.target.closest('.island'));
     if (ignore !== passthrough) {
       passthrough = ignore;
@@ -536,6 +540,7 @@ async function init() {
     }
   });
   document.addEventListener('pointerleave', () => {
+    if (resizingPointer) return;
     passthrough = true;
     void api.setPointerPassthrough(true);
   });

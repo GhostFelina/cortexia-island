@@ -9,6 +9,8 @@ OLED siyah masaüstü adası. Ağ sağlığını, anlık trafiği ve PC enerji m
 3. Dişli düğmesinden faturandaki kWh fiyatını gir. Boşta/yoğun yük watt profilini cihazına göre ayarla.
 4. Widget listesinden ağ, güç, enerji, sistem, batarya ve saati seç. Ok düğmesiyle sıralamayı değiştir.
 5. **Ctrl/⌘ + Shift + I** gösterir/gizler. Sistem tepsisinden açabilir veya kapatabilirsin.
+6. Başlıktaki marka alanını mouse ile tutup sürükle. Dört köşeden boyutlandır; her görünümün boyutu ayrı hatırlanır. “Üst ortaya geri getir” adayı ekranın üst kenarına birleştirir.
+7. Saydamlık ve tıklama geçişini ayarlardan seç. Tam gizlemeden veya tıklama geçişinden tepsi/kısayolla geri dön. Açıkken Windows görev çubuğunda veya Mac Dock’ta uygulama ikonu görünür.
 
 ## Verileri doğru yorumlama
 

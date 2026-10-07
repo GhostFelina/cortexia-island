@@ -42,7 +42,7 @@ if (!lock) {
       displays.find((d) => d.id === store.data.settings.displayId) ?? screen.getPrimaryDisplay();
     const area = display.workArea;
     const size = store.data.settings.sizes[view];
-    const width = Math.min(size?.width ?? 560, area.width);
+    const width = Math.min(size?.width ?? (view === 'compact' ? 420 : 560), area.width);
     const height = Math.min(size?.height ?? heights[view], area.height);
     const saved = store.data.settings.position;
     const x = saved
