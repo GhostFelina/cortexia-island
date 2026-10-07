@@ -241,7 +241,9 @@ if (!lock) {
       const settings = validateSettings(input);
       if (
         settings.tariff !== store.data.settings.tariff ||
-        settings.currency !== store.data.settings.currency
+        settings.currency !== store.data.settings.currency ||
+        settings.electricity.tier !== store.data.settings.electricity.tier ||
+        settings.electricity.subscription !== store.data.settings.electricity.subscription
       )
         settings.electricity = {
           ...settings.electricity,
@@ -654,6 +656,13 @@ if (!lock) {
           );
           await pause();
           if (win.getBounds().height !== 68) throw new Error('Compact window failed');
+          const compactAlignment = await win.webContents.executeJavaScript(
+            `(()=>{const island=document.querySelector('.compact').getBoundingClientRect();const stats=[...document.querySelectorAll('.compact-stat')].map(e=>e.getBoundingClientRect());const center=(stats[0].left+stats.at(-1).right)/2;return {error:Math.abs(center-(island.left+island.right)/2),overflow:document.querySelector('.compact-readout').scrollWidth>document.querySelector('.compact-readout').clientWidth};})()`,
+          );
+          if (compactAlignment.error > 1 || compactAlignment.overflow)
+            throw new Error(
+              'Compact centering/overflow failed: ' + JSON.stringify(compactAlignment),
+            );
           fs.writeFileSync(
             path.join(artifact, 'compact.png'),
             (await win.webContents.capturePage()).toPNG(),
@@ -739,6 +748,7 @@ if (!lock) {
                   'cross-display-persistence',
                   'energy-first-hierarchy',
                   'daily-hourly-cost',
+                  'compact-centered-metrics',
                   'tariff-setup-focus',
                   'tariff-setup-persistence',
                 ],

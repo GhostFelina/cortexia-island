@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-alpha.5 — 2026-10-07
+
+- Center compact metric content between symmetric brand/expand controls at every window width.
+- Refine compact spacing, value alignment, champagne separators and subtle upper light reflection; assert centering and no overflow in native smoke.
+- Persist manual location/subscription selections and clear online provenance when the selected tariff tier or subscription changes.
+- Include the electricity-first redesign and direct EPDK setup introduced in the alpha.4 source revision. Alpha.4 was not tagged remotely; alpha.5 is the packaged follow-up.
+
 ## 0.1.0-alpha.4 — 2026-10-07
 
 - Make electricity and cost the primary theme: prominent daily estimated cost, tracked kWh, current-power hourly estimate and secondary network readings.

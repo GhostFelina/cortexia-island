@@ -1,6 +1,6 @@
 # Current handoff
 
-Version: 0.1.0-alpha.4. Branch: main. All owner requests and the continuation queue are recorded in REQUESTS.md.
+Version: 0.1.0-alpha.5. Branch: main. All owner requests and the continuation queue are recorded in REQUESTS.md.
 
 The initial desktop foundation is implemented. Read README, ROADMAP, ARCHITECTURE and RELEASING before continuing. The owner will supply the next widget ideas. Keep the reference concept as inspiration; design remains original.
 

@@ -558,7 +558,16 @@ function bindSettings() {
     const num = (key: string) => Number(data.get(key));
     const next: Settings = {
       ...settings,
-      electricity: { ...settings.electricity, onboardingComplete: true },
+      electricity: {
+        ...settings.electricity,
+        city: String(data.get('tariffCity') ?? settings.electricity.city),
+        district: String(data.get('tariffDistrict') ?? settings.electricity.district).trim(),
+        subscription: (data.get('tariffSubscription') ??
+          settings.electricity.subscription) as Settings['electricity']['subscription'],
+        tier: (data.get('tariffTier') ??
+          settings.electricity.tier) as Settings['electricity']['tier'],
+        onboardingComplete: true,
+      },
       widgets: data.getAll('widget') as WidgetId[],
       language: data.get('language') as Settings['language'],
       currency: data.get('currency') as Settings['currency'],

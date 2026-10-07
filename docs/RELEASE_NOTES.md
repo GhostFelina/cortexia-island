@@ -1,6 +1,8 @@
-# Cortexia Island 0.1.0-alpha.4
+# Cortexia Island 0.1.0-alpha.5
 
 An original OLED black island focused on PC electricity and estimated cost, with optional Shelly outlet readings, network health and six configurable widgets.
+
+Alpha.5 centers compact content between symmetric end controls, refines numerical alignment and restrained material detail, and tests centering/no overflow. Includes the alpha.4 electricity-first source changes below.
 
 Alpha.4 puts today's estimated cost first in compact and expanded views. Tracked kWh, instantaneous watts and the hourly estimate at current power complete the electricity story. Missing tariffs lead to a clear setup action; historical unpriced consumption stays unpriced. Network traffic becomes a secondary panel. Typography, spacing, material restraint and bundled Lucide icons refine the visual hierarchy. Smoke tests cover cost math on screen and the tariff setup journey.
 

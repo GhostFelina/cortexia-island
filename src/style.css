@@ -1328,3 +1328,54 @@ footer {
 .subtle-button:hover {
   color: #fff;
 }
+/* Symmetric end controls keep the metric group centered when the island collapses. */
+.compact {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  gap: 8px;
+  padding: 0 14px;
+  background: radial-gradient(ellipse at 50% -70%, #ffffff0d, transparent 65%), #000;
+}
+.compact .compact-brand {
+  justify-content: center;
+  min-width: 0;
+}
+.compact > .icon-button {
+  justify-self: center;
+}
+.compact .compact-readout {
+  width: 100%;
+  justify-content: center;
+  gap: 22px;
+}
+.compact .compact-readout .compact-stat {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+}
+.compact .compact-value,
+.compact .compact-context {
+  justify-content: center;
+}
+.compact .compact-separator {
+  margin: 0;
+  height: 30px;
+  background: linear-gradient(transparent, #d9cda829, transparent);
+}
+.compact .compact-value strong {
+  line-height: 24px;
+}
+.compact .compact-context {
+  letter-spacing: 0.15px;
+}
+@media (max-width: 380px) {
+  .compact {
+    grid-template-columns: 22px minmax(0, 1fr) 22px;
+    padding: 0 8px;
+    gap: 5px;
+  }
+  .compact .compact-readout {
+    gap: 12px;
+  }
+}
