@@ -46,7 +46,7 @@ jobs:
         run: node scripts/smoke-package.cjs ${{ matrix.platform }} ${{ matrix.arch }}
       - name: Generate checksums
         run: node scripts/checksums.cjs ${{ matrix.platform }}-${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: packages-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
