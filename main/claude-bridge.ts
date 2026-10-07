@@ -27,7 +27,7 @@ export function installClaudeBridge(
   const stateFile = path.join(directory, 'claude-bridge-state.json');
   const oldState = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : null;
   const previousStatusLine =
-    settings.statusLine?.command === oldState?.command
+    oldState && settings.statusLine?.command === oldState.command
       ? oldState.previousStatusLine
       : (settings.statusLine ?? null);
   if (

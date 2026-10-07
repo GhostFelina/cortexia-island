@@ -101,6 +101,21 @@ test('real usage windows validate percentages, durations, expiry and freshness',
 test('Claude bridge preserves settings, sanitizes input and restores the original status line', () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'cortexia-bridge-'));
   try {
+    const cleanHome = path.join(temporary, 'clean-home');
+    const cleanDirectory = path.join(temporary, 'clean-integration');
+    assert.ok(
+      installClaudeBridge(
+        cleanDirectory,
+        path.resolve('assets/integrations/claude-statusline.cjs'),
+        process.execPath,
+        cleanHome,
+      ),
+    );
+    assert.ok(removeClaudeBridge(cleanDirectory, cleanHome));
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(path.join(cleanHome, '.claude', 'settings.json'), 'utf8')),
+      {},
+    );
     const home = path.join(temporary, 'home'),
       directory = path.join(temporary, 'integrations');
     fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
