@@ -1105,6 +1105,226 @@ footer {
     gap: 2px;
   }
 }
+
+/* Energy is the product's primary job: daily cost first, supporting data second. */
+.money-hero {
+  display: block;
+  padding: 10px 2px 2px;
+}
+.money-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  color: #b2b4b9;
+  font-size: 10px;
+  letter-spacing: 1.15px;
+}
+.energy-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #d6c9a1;
+  font-size: 9px;
+  letter-spacing: 0.6px;
+}
+.energy-tag .icon {
+  width: 12px;
+  height: 12px;
+}
+.money-total {
+  margin: 12px 0 6px;
+  color: #f0eee8;
+  font-size: 56px;
+  font-weight: 520;
+  line-height: 1.08;
+  letter-spacing: -2.7px;
+  font-variant-numeric: tabular-nums;
+}
+.tariff-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d8c28a40;
+  border-radius: 9px;
+  color: #e3d2a8;
+  background: #d8c28a0c;
+  padding: 9px 12px;
+  font-size: 11px;
+  margin: 3px 0 9px;
+}
+.tariff-cta[hidden] {
+  display: none;
+}
+.tariff-cta:hover {
+  background: #d8c28a18;
+}
+.tariff-cta .icon {
+  width: 13px;
+  height: 13px;
+}
+.energy-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 17px;
+  padding-top: 13px;
+  border-top: 1px solid #ffffff12;
+}
+.energy-summary > div > span {
+  font-size: 10px;
+  color: #969ba3;
+}
+.energy-summary strong {
+  font-size: 22px;
+  color: #dddfe2;
+  line-height: 1.55;
+  letter-spacing: -0.5px;
+}
+.energy-summary strong small {
+  margin-left: 5px;
+  font-size: 11px;
+}
+.money-hero .microcopy {
+  font-size: 9px;
+  color: #868d96;
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+.power-main {
+  gap: 10px;
+}
+.power-orb {
+  width: 30px;
+  height: 38px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.power-orb .icon {
+  width: 23px;
+  height: 23px;
+}
+.power-number {
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.power-card .microcopy {
+  color: #7e858f;
+  font-size: 9px;
+}
+.power-track {
+  height: 2px;
+  margin-top: 10px;
+}
+.network-card {
+  padding: 11px 12px;
+  background: #ffffff02;
+  border-radius: 14px;
+}
+.network-card .traffic {
+  margin-top: 8px;
+  gap: 18px;
+}
+.network-card .big {
+  font-size: 23px;
+  letter-spacing: -0.7px;
+}
+.network-card .sparkline {
+  height: 13px;
+  opacity: 0.6;
+}
+.network-card .metric-label {
+  font-size: 8px;
+}
+.compact {
+  padding-left: 15px;
+  gap: 16px;
+}
+.compact .compact-value strong {
+  font-size: 23px;
+  font-weight: 540;
+  letter-spacing: -0.8px;
+}
+.compact .compact-money .compact-value strong {
+  color: #f1eee5;
+  font-size: 25px;
+}
+.compact .compact-context {
+  font-size: 9px;
+  letter-spacing: 0.25px;
+  gap: 4px;
+  color: #9aa0a8;
+}
+.compact .compact-context b {
+  font-weight: 400;
+  color: #b0b4bc;
+}
+.compact .context-dot {
+  color: #565e68;
+}
+.compact .compact-value.warm {
+  color: #d9cda8;
+}
+.compact .compact-separator {
+  margin: 0 2px;
+}
+.compact .compact-brand .brand-mark {
+  width: 25px;
+  height: 25px;
+  opacity: 0.95;
+}
+.compact .compact-brand {
+  min-width: 29px;
+}
+.compact > .icon-button {
+  width: 26px;
+  height: 30px;
+  color: #a3a8b0;
+}
+@media (max-width: 380px) {
+  .compact {
+    gap: 9px;
+    padding: 0 9px;
+  }
+  .compact-readout {
+    gap: 10px;
+  }
+  .compact .compact-value strong,
+  .compact .compact-money .compact-value strong {
+    font-size: 20px;
+  }
+  .compact .compact-context {
+    font-size: 8px;
+    gap: 3px;
+  }
+  .compact .compact-brand {
+    min-width: 22px;
+  }
+  .compact .compact-brand .brand-mark {
+    width: 21px;
+    height: 21px;
+  }
+}
 .brand {
   gap: 7px;
+}
+.tariff-setup .primary-button {
+  margin-top: 10px;
+  color: #eee3c9;
+  background: #262217;
+  border: 1px solid #645537;
+}
+.subtle-button {
+  background: transparent;
+  border: 0;
+  padding: 6px 0;
+  color: #b7bdc6;
+  font: inherit;
+  cursor: pointer;
+}
+.subtle-button:hover {
+  color: #fff;
 }

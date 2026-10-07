@@ -1,9 +1,36 @@
 export type WidgetId = 'network' | 'power' | 'energy' | 'system' | 'battery' | 'clock';
 export type View = 'compact' | 'expanded' | 'settings';
+export interface ElectricityProfile {
+  city: string;
+  district: string;
+  subscription: 'residential' | 'other';
+  tier: 'low' | 'high';
+  onboardingComplete: boolean;
+  source: 'manual' | 'epdk';
+  effectiveDate: string | null;
+  checkedAt: number | null;
+}
+export interface TariffRequest {
+  city: string;
+  district: string;
+  subscription: 'residential' | 'other';
+  tier: 'low' | 'high';
+}
+export interface TariffQuote {
+  price: number;
+  energy: number;
+  distribution: number;
+  vat: number;
+  consumptionTax: number;
+  effectiveDate: string;
+  checkedAt: number;
+  documentUrl: string;
+}
 export interface Settings {
   language: 'tr' | 'en';
   widgets: WidgetId[];
   tariff: number | null;
+  electricity: ElectricityProfile;
   currency: 'TRY' | 'USD' | 'EUR';
   idleWatts: number;
   maxWatts: number;
@@ -78,6 +105,7 @@ export interface AppInfo {
   preview: boolean;
 }
 export interface IslandAPI {
+  findTariff(request: TariffRequest): Promise<{ settings: Settings; quote: TariffQuote }>;
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<Settings>;
   getSnapshot(): Promise<Snapshot | null>;

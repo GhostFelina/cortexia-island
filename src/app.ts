@@ -1,5 +1,26 @@
+import {
+  createElement,
+  Wifi,
+  Zap,
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  Settings as SettingsIcon,
+  X,
+  Minus,
+  Plus,
+  ChartNoAxesCombined,
+  Cpu,
+  Battery,
+  Clock,
+  ShieldCheck,
+  LayoutGrid,
+  EyeOff,
+  type IconNode,
+} from 'lucide';
 import './style.css';
 import brandMark from '../assets/mark.png';
+import { TURKEY_CITIES } from '../shared/locations';
 import type {
   Settings,
   Snapshot,
@@ -28,27 +49,30 @@ let view: View = 'expanded';
 let docked = true;
 let showHistory = false;
 let update: UpdateStatus = { phase: 'idle' };
-const icons: Record<string, string> = {
-  wifi: '<path d="M2 8.5a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8.5 15.5a5.5 5.5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/>',
-  bolt: '<path d="m13 2-9 12h7l-1 8 10-12h-7l1-8Z"/>',
-  down: '<path d="M12 4v16m-6-6 6 6 6-6"/>',
-  up: '<path d="M12 20V4m-6 6 6-6 6 6"/>',
-  chevron: '<path d="m7 10 5 5 5-5"/>',
-  gear: '<path d="m9 3-1 3-3 1 1 3-2 2 2 2-1 3 3 1 1 3h6l1-3 3-1-1-3 2-2-2-2 1-3-3-1-1-3Z"/><circle cx="12" cy="12" r="3"/>',
-  close: '<path d="m6 6 12 12M6 18 18 6"/>',
-  minus: '<path d="M5 12h14"/>',
-  plus: '<path d="M5 12h14M12 5v14"/>',
-  chart: '<path d="M3 3v18h18M7 15l4-5 4 3 5-8"/>',
-  cpu: '<rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/>',
-  battery: '<rect x="2" y="7" width="18" height="10" rx="3"/><path d="M23 10v4M6 10v4m4-4v4"/>',
-  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  shield: '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
-  grid: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
-  eyeOff:
-    '<path d="m3 3 18 18M10.5 10.5a2.1 2.1 0 0 0 3 3M7 7C4 9 2 12 2 12s4 7 10 7c2 0 4-.8 5.4-1.9M10 5c6-.8 12 7 12 7s-1 2-3 4"/>',
+const icons: Record<string, IconNode> = {
+  wifi: Wifi,
+  bolt: Zap,
+  down: ArrowDown,
+  up: ArrowUp,
+  chevron: ChevronDown,
+  gear: SettingsIcon,
+  close: X,
+  minus: Minus,
+  plus: Plus,
+  chart: ChartNoAxesCombined,
+  cpu: Cpu,
+  battery: Battery,
+  clock: Clock,
+  shield: ShieldCheck,
+  grid: LayoutGrid,
+  eyeOff: EyeOff,
 };
 const icon = (name: string, cls = '') =>
-  `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] ?? icons.grid}</svg>`;
+  createElement(icons[name] ?? LayoutGrid, {
+    class: 'icon ' + cls,
+    'stroke-width': '1.7',
+    'aria-hidden': 'true',
+  }).outerHTML;
 const e = (value: unknown) =>
   String(value).replace(
     /[&<>"']/g,
@@ -66,7 +90,7 @@ const money = (n: number) =>
   new Intl.NumberFormat(settings.language, {
     style: 'currency',
     currency: settings.currency,
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 2,
   }).format(n);
 const setText = (key: string, text: string) =>
   root
@@ -117,7 +141,7 @@ function powerCard() {
   return `<section class="power-card" data-widget-card="power"><div class="power-main"><div class="power-orb">${icon('bolt')}</div><div><span class="metric-label">${t('ANLIK GÜÇ', 'LIVE POWER')}</span><div class="power-number"><span data-value="watts">—</span><small> W</small></div></div><span class="source-chip" data-value="source">${t('TAHMİN', 'ESTIMATE')}</span></div><div class="power-track"><span data-power-fill></span></div><p class="microcopy" data-value="power-note">${t('Yük profiline göre hesaplanır', 'Calculated from your load profile')}</p></section>`;
 }
 function energyCard() {
-  return `<section class="energy-card" data-widget-card="energy"><div><span class="metric-label">${t('BUGÜN TÜKETİLEN', 'ENERGY TODAY')}</span><strong><span data-value="energy">—</span><small> kWh</small></strong></div><div class="cost"><span class="metric-label">${t('TAHMİNİ MALİYET', 'ESTIMATED COST')}</span><strong data-value="cost">${t('Tarife ekle', 'Set tariff')}</strong></div><p class="microcopy" data-value="tracked">${t('Yalnızca uygulama açıkken takip edilir', 'Tracked while the app is running')}</p></section>`;
+  return `<section class="energy-card money-hero" data-widget-card="energy"><div class="money-heading"><span>${t('BUGÜNÜN TAHMİNİ MALİYETİ', 'ESTIMATED COST TODAY')}</span><span class="energy-tag">${icon('bolt')}${t('ELEKTRİK', 'ENERGY')}</span></div><div class="money-total" data-value="hero-cost">—</div><button class="tariff-cta" data-action="tariff" ${settings.tariff !== null ? 'hidden' : ''}>${t('Elektrik tarifeni ekle', 'Set your electricity tariff')}${icon('plus')}</button><div class="energy-summary"><div><span>${t('Takip edilen tüketim', 'Tracked energy')}</span><strong><span data-value="energy">—</span><small>kWh</small></strong></div><div><span>${t('Bu güçle saatlik tahmin', 'Estimated hourly at this power')}</span><strong data-value="hourly-cost">—</strong></div></div><p class="microcopy" data-value="tracked">${t('Yalnızca uygulama açıkken takip edilir', 'Tracked while running')}</p></section>`;
 }
 function smallCard(id: WidgetId) {
   const c = catalog[id];
@@ -134,7 +158,7 @@ function compactWidget(id: WidgetId) {
   if (id === 'power')
     return `<span class="compact-stat">${value('watts', 'W', 'bolt', 'warm')}<span class="compact-context"><span data-value="source">${t('TAHMİN', 'ESTIMATE')}</span><span>· ${t('güç', 'power')}</span></span></span>`;
   if (id === 'energy')
-    return `<span class="compact-stat">${value('energy', 'kWh', 'chart')}<span class="compact-context">${t('BUGÜN', 'TODAY')}</span></span>`;
+    return `<span class="compact-stat compact-money"><span class="compact-value"><strong data-value="compact-cost">—</strong></span><span class="compact-context">${t('BUGÜN', 'TODAY')}<span class="context-dot">·</span><b data-value="energy">—</b><span>kWh</span></span></span>`;
   if (id === 'system')
     return `<span class="compact-stat">${value('compact-cpu', '%', 'cpu')}<span class="compact-context">CPU</span></span>`;
   if (id === 'battery')
@@ -150,7 +174,10 @@ function render() {
   } else {
     root.innerHTML = settingsHtml();
   }
-  if (view === 'settings') insertPersonalization();
+  if (view === 'settings') {
+    insertPersonalization();
+    root.querySelector('#settings-form')?.insertAdjacentHTML('afterbegin', tariffSetupHtml());
+  }
   root.querySelectorAll('.lens').forEach((el) => {
     const image = document.createElement('img');
     image.src = brandMark;
@@ -262,6 +289,15 @@ function paint() {
           ),
   );
   setText('energy', fmt((day.estimatedWh + day.measuredWh) / 1000, 3));
+  const priced = day.pricedWh > 0 || settings.tariff !== null;
+  setText('hero-cost', priced ? money(day.cost) : '—');
+  setText('compact-cost', priced ? money(day.cost) : t('Tarife ekle', 'Set tariff'));
+  setText(
+    'hourly-cost',
+    settings.tariff !== null && p.watts !== null && p.available
+      ? money((p.watts / 1000) * settings.tariff)
+      : '—',
+  );
   setText(
     'cost',
     day.pricedWh > 0
@@ -401,6 +437,52 @@ function feedback(message: string, bad = false) {
 }
 async function action(name: string) {
   try {
+    if (name === 'skip-tariff') {
+      settings = await api!.saveSettings({
+        ...settings,
+        electricity: { ...settings.electricity, onboardingComplete: true },
+      });
+      return switchView('compact');
+    }
+    if (name === 'find-tariff') {
+      const form = root.querySelector<HTMLFormElement>('#settings-form')!;
+      const data = new FormData(form);
+      const control = root.querySelector<HTMLButtonElement>('[data-action="find-tariff"]')!;
+      const status = root.querySelector<HTMLElement>('[data-tariff-status]')!;
+      control.disabled = true;
+      status.textContent = t(
+        'Resmî EPDK tablosu kontrol ediliyor…',
+        'Checking the official EPDK table…',
+      );
+      try {
+        const result = await api!.findTariff({
+          city: String(data.get('tariffCity')),
+          district: String(data.get('tariffDistrict')),
+          subscription: data.get('tariffSubscription') as 'residential' | 'other',
+          tier: data.get('tariffTier') as 'low' | 'high',
+        });
+        settings = result.settings;
+        render();
+        const note = root.querySelector<HTMLElement>('[data-tariff-status]');
+        if (note)
+          note.textContent += ` · ${money(result.quote.price)} / kWh · ${t('Uygulandı', 'Applied')}`;
+      } catch (error) {
+        status.textContent =
+          error instanceof Error
+            ? error.message.replace(/^Error invoking remote method 'tariff:find': Error: /, '')
+            : t('Tarife bulunamadı. Tekrar dene.', 'Could not retrieve tariff. Retry.');
+      } finally {
+        control.disabled = false;
+      }
+      return;
+    }
+    if (name === 'tariff') {
+      await switchView('settings');
+      const input = root.querySelector<HTMLSelectElement>('select[name="tariffCity"]');
+      input?.closest('section')?.scrollIntoView({ block: 'start' });
+      input?.focus();
+      return;
+    }
     if (name === 'expand') return switchView('expanded');
     if (name === 'compact') return switchView('compact');
     if (name === 'settings' || name === 'widgets') {
@@ -447,6 +529,17 @@ async function action(name: string) {
     );
   }
 }
+function tariffSetupHtml() {
+  const p = settings.electricity;
+  return `<section class="tariff-setup"><div class="section-title">${icon('bolt')}<h2>${t('ELEKTRİK TARİFENİ BULALIM', 'FIND YOUR ELECTRICITY TARIFF')}</h2></div><p class="section-intro">${t('Şehir ve semtini seç. Desteklenen mesken tarifesini EPDK’dan çevrimiçi bulup uygulayalım.', 'Choose your city and district. We will retrieve and apply a supported residential tariff from EPDK.')}</p><div class="form-grid"><label>${t('Şehir · Türkiye', 'City · Türkiye')}<select name="tariffCity"><option value="">${t('Şehir seç', 'Choose city')}</option>${[
+    ...TURKEY_CITIES,
+  ]
+    .sort((a, b) => a.localeCompare(b, 'tr'))
+    .map((c) => `<option ${c === p.city ? 'selected' : ''}>${e(c)}</option>`)
+    .join(
+      '',
+    )}</select></label><label>${t('İlçe / semt', 'District / neighborhood')}<input name="tariffDistrict" maxlength="60" value="${e(p.district)}" placeholder="${t('İlçe veya semt adı', 'District or neighborhood')}"></label><label>${t('Abonelik', 'Subscription')}<select name="tariffSubscription"><option value="residential" ${p.subscription === 'residential' ? 'selected' : ''}>${t('Mesken · ulusal · tek zamanlı', 'Residential · national · single rate')}</option><option value="other" ${p.subscription === 'other' ? 'selected' : ''}>${t('SKTT / özel / ticari / çok zamanlı', 'Special / commercial / time of use')}</option></select></label><label>${t('Ev tüketimi kademesi', 'Household consumption tier')}<select name="tariffTier"><option value="low" ${p.tier === 'low' ? 'selected' : ''}>${t('Düşük · günlük 8 kWh ve altı', 'Low · up to 8 kWh per day')}</option><option value="high" ${p.tier === 'high' ? 'selected' : ''}>${t('Yüksek · 8 kWh üstü bölüm', 'High · portion above 8 kWh')}</option></select></label></div><p class="microcopy">${t('Kademe tüm evin tüketimi içindir. Şehir/semt cihazında kalır; ulusal fiyat şehre göre değişmez. Özel aboneliklerde faturandaki fiyatı kullan.', 'The tier concerns your whole household. Location stays local; the national price does not vary by city. Use your invoice for special subscriptions.')}</p><button type="button" class="primary-button" data-action="find-tariff">${t('Çevrimiçi bul ve uygula', 'Find online and apply')}</button><p class="microcopy" data-tariff-status role="status">${p.source === 'epdk' ? e(t('EPDK · Vergiler dahil · Geçerli: ', 'EPDK · Taxes included · Effective: ') + p.effectiveDate + ' · ' + t('Kontrol: ', 'Checked: ') + new Date(p.checkedAt!).toLocaleDateString(settings.language)) : t('Kaynak, geçerlilik tarihi ve vergi dahil fiyat gösterilir.', 'Source, effective date and tax-inclusive price will be shown.')}</p><button type="button" class="subtle-button" data-action="skip-tariff">${t('Şimdilik geç', 'Skip for now')}</button></section>`;
+}
 function bindSettings() {
   const form = root.querySelector<HTMLFormElement>('#settings-form')!;
   root.querySelectorAll<HTMLButtonElement>('[data-reorder]').forEach((el) =>
@@ -465,6 +558,7 @@ function bindSettings() {
     const num = (key: string) => Number(data.get(key));
     const next: Settings = {
       ...settings,
+      electricity: { ...settings.electricity, onboardingComplete: true },
       widgets: data.getAll('widget') as WidgetId[],
       language: data.get('language') as Settings['language'],
       currency: data.get('currency') as Settings['currency'],
@@ -529,6 +623,8 @@ async function init() {
   docked = initialLayout.docked;
   view = info.initialView;
   render();
+  if (view === 'settings' && !settings.electricity.onboardingComplete)
+    root.querySelector<HTMLSelectElement>('[name="tariffCity"]')?.focus();
   api.onLayout((next) => {
     docked = next.docked;
     root.classList.toggle('edge-attached', docked);

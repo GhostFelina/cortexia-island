@@ -17,12 +17,13 @@ Recorded 2026-10-07. Project: **Cortexia Island**. First target: the owner's Win
 - Local backups/recovery/export, tests, manual update check/download/install and cross-platform package workflows.
 - Windows `.exe`; Apple Silicon and Intel Mac `.dmg` plus update `.zip` files.
 - Progress and actual local application previews shown to the owner.
+- Alpha.4: first-launch city/district and subscription/tier setup, direct EPDK online tariff lookup/application, source/date display and manual fallback for unsupported plans.
 
 ## Next iteration, explicitly queued by the owner
 
-Follow-up implemented in alpha.3: thinner compact notch, concave shoulder transitions, refined value stacks and free cross-monitor positioning. Both connected Windows displays are covered by local smoke. Broader expanded-view refinement remains queued below.
+Follow-up implemented in alpha.3: thinner compact notch, concave shoulder transitions and free cross-monitor positioning. Alpha.4 audits the owner's private denetle.png and redesigns both views around electricity and cost. Both connected Windows displays are covered by local smoke. The original screenshot remains local because it includes desktop content.
 
-1. Refine the island and data aesthetics: typography, numerical alignment, spacing, mini charts, compact layout and material detail.
+1. Continue visual refinement based on the owner's next feedback; the cost-first typography, spacing, compact stacks and restrained surfaces are implemented in alpha.4.
 2. Add the owner's next widget list when supplied. Do not assume a final list or execute arbitrary third-party code from a widget selector.
 3. Install and validate on the real MacBook and Windows notebook when available.
 

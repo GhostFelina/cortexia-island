@@ -1,12 +1,12 @@
 # Cortexia Island
 
-OLED siyah masaüstü adası. Ağ sağlığını, anlık trafiği ve PC enerji maliyetini takip eder. Ayarlardan widget ekleyip çıkarabilir ve sıralayabilirsin.
+OLED siyah masaüstü adası. Ana odak PC'nin elektrik tüketimi ve tahmini maliyetidir. Küçük görünümde bugünkü tutar, kWh ve anlık watt; geniş görünümde saatlik tahmin de gösterilir. Ağ sağlığı ikinci planda takip edilir. Ayarlardan widget ekleyip çıkarabilir ve sıralayabilirsin.
 
 ## Başlangıç
 
 1. [Sürümlerden](https://github.com/GhostFelina/cortexia-island/releases) Windows x64 `.exe` paketini indir. Mac için arm64 (Apple Silicon) veya x64 (Intel) `.dmg` seç.
 2. Ada ekranın üst ortasında ince kompakt çentik olarak açılır. Verilere tıklayarak genişlet; küçült düğmesiyle geri dön.
-3. Dişli düğmesinden faturandaki kWh fiyatını gir. Boşta/yoğun yük watt profilini cihazına göre ayarla.
+3. İlk açılışta şehir/semt, abonelik ve ev tüketimi kademesini seçip **Çevrimiçi bul ve uygula** düğmesine bas. Desteklenen ulusal mesken tek zamanlı tarifesi resmî EPDK tablosundan okunur; kaynağı, geçerlilik ve kontrol tarihi gösterilir. Şehir/semt cihazında kalır. SKTT/özel/ticari/çok zamanlı aboneliklerde faturandaki fiyatı gir. Boşta/yoğun yük watt profilini cihazına göre ayarla. Tarife yokken tutar uydurulmaz; saatlik rakam mevcut gücün bir saat sürmesi varsayımıdır.
 4. Widget listesinden ağ, güç, enerji, sistem, batarya ve saati seç. Ok düğmesiyle sıralamayı değiştir.
 5. **Ctrl/⌘ + Shift + I** gösterir/gizler. Sistem tepsisinden açabilir veya kapatabilirsin.
 6. Başlıktaki marka alanını mouse ile tutup sürükle. Dört köşeden boyutlandır; her görünümün boyutu ayrı hatırlanır. “Üst ortaya geri getir” adayı ekranın üst kenarına birleştirir.

@@ -1,18 +1,20 @@
 <p align="center"><img src="assets/icon.png" width="88" alt="Cortexia Island"></p>
 <h1 align="center">Cortexia Island</h1>
-<p align="center"><img src="assets/brand/hero.png" width="960" alt="Cortexia Island — Network. Energy. In focus."></p>
-<p align="center">A quiet OLED black island for your desktop.<br>Live network health. Honest energy estimates. Your choice of widgets.</p>
+<p align="center"><img src="assets/brand/hero.png" width="960" alt="Cortexia Island — Power. Cost. Clarity."></p>
+<p align="center">Power. Cost. Clarity.<br>A quiet OLED black island for PC electricity, estimated cost and live network health.</p>
 <p align="center"><a href="https://github.com/GhostFelina/cortexia-island/actions/workflows/ci.yml"><img src="https://github.com/GhostFelina/cortexia-island/actions/workflows/ci.yml/badge.svg" alt="Quality"></a> <img src="https://img.shields.io/badge/license-MIT-93cbb1" alt="MIT license"> <img src="https://img.shields.io/badge/status-alpha-e0bd79" alt="Alpha"></p>
 <p align="center"><a href="https://github.com/GhostFelina/cortexia-island/releases">Download</a> · <a href="docs/README.tr.md">Türkçe</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
 
 <p align="center"><img src="docs/images/showcase.png" width="560" alt="Cortexia Island expanded view with labeled demo readings"></p>
 <p align="center"><sub>Demo readings shown above. Your installation uses live local data.</sub></p>
-<p align="center"><img src="docs/images/compact.png" width="400" alt="Thin compact notch with stacked network and power demo readings"></p>
+<p align="center"><img src="docs/images/compact.png" width="440" alt="Thin compact notch with daily estimated cost, tracked kWh and power demo readings"></p>
 
 Cortexia Island is a compact, frameless desktop overlay with subtle grain, restrained light reflections and true black surfaces. Collapse it to a pill, expand it for detail, or select and reorder widgets in Settings. It is an independent design; it is not affiliated with Apple.
 
 ## What works today
 
+- **Cost first:** today's estimated electricity cost leads both compact and expanded views, alongside tracked kWh, instantaneous watts and an hourly estimate at the current power. An explicit tariff setup action appears when no price is configured.
+- **Online tariff setup:** first launch asks for a Turkish city/district and subscription/tier. Supported national single-rate residential tariffs are retrieved directly from EPDK, validated and applied with tax-inclusive price, effective date and check date. Location stays local. Special contracts, SKTT, commercial and time-of-use pricing require the invoice rate. See [tariff sources and scope](docs/TARIFFS.md).
 - **Network:** selected adapter throughput, ICMP target latency, jitter and lost replies over the last 20 probes. Readings every ~2 seconds, probes every ~6 seconds.
 - **Energy:** configurable idle/full load profile; optional Shelly Gen2/Gen3 outlet power readings; daily measured/estimated kWh and costs based on your tariff.
 - **Widgets:** network, power, energy, CPU/RAM, notebook battery and local clock. Select and reorder them from a list.
@@ -56,9 +58,11 @@ Dependencies and lockfiles are project local. Recreate `node_modules` on each ma
 
 See [architecture](docs/ARCHITECTURE.md), [widget development](docs/WIDGETS.md), [release procedure](docs/RELEASING.md) and [cross-device setup](docs/CROSS_DEVICE.md).
 
+Read the [design audit](docs/DESIGN_AUDIT.md) for the electricity-first hierarchy and its validation scope.
+
 ## Privacy
 
-No analytics, accounts or cloud telemetry. Data remains in Electron’s per-user application directory. The only routine external connection is the configured ICMP ping target. Update checks contact GitHub only when requested; a selected meter is contacted on your local network. Exported backups include settings and energy history: review them before sharing.
+No analytics, accounts or cloud telemetry. Data remains in Electron’s per-user application directory. The routine external connection is the configured ICMP ping target. Online tariff requests contact EPDK without transmitting city, district or personal identifiers. Update checks contact GitHub only when requested; a selected meter is contacted on your local network. Exported backups include settings, location preferences and energy history: review them before sharing.
 
 ## Help shape the island
 

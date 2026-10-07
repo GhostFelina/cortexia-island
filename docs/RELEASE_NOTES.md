@@ -1,6 +1,10 @@
-# Cortexia Island 0.1.0-alpha.3
+# Cortexia Island 0.1.0-alpha.4
 
-First alpha: an original OLED black island with network health, calibrated power estimates, optional Shelly outlet readings, daily energy/cost tracking and six configurable widgets.
+An original OLED black island focused on PC electricity and estimated cost, with optional Shelly outlet readings, network health and six configurable widgets.
+
+Alpha.4 puts today's estimated cost first in compact and expanded views. Tracked kWh, instantaneous watts and the hourly estimate at current power complete the electricity story. Missing tariffs lead to a clear setup action; historical unpriced consumption stays unpriced. Network traffic becomes a secondary panel. Typography, spacing, material restraint and bundled Lucide icons refine the visual hierarchy. Smoke tests cover cost math on screen and the tariff setup journey.
+
+First launch now asks for city/district and subscription/tier. The supported Turkish national single-rate residential tariff is read directly from EPDK's latest effective XLSX and applied with reviewed 2026 taxes. Price, source, effective date and check date are visible. Location stays local. Unsupported SKTT/special/commercial/time-of-use plans use the invoice price. Failed or malformed responses never replace a configured tariff. Tax rules expire after 2026 pending review; see TARIFFS.md.
 
 Alpha.3 refines the compact view into a thin notch with concave top shoulders and stacked readings. Drag the grip/brand to any monitor; optional top-edge snapping works on each screen and switches back to a floating capsule away from the edge. Geometry tests cover negative/vertical monitor coordinates and removal; local Windows smoke exercises both connected displays. The app opens compact by default.
 

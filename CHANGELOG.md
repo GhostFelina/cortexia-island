@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-alpha.4 — 2026-10-07
+
+- Make electricity and cost the primary theme: prominent daily estimated cost, tracked kWh, current-power hourly estimate and secondary network readings.
+- Replace the compact network-first HUD with balanced cost/power stacks, 440 px default width, clearer units and restrained champagne accents.
+- Add a visible no-tariff action that opens Settings and focuses the electricity price; preserve unpriced history.
+- Add first-launch city/district and subscription setup; retrieve supported national residential tariff XLSX directly from EPDK and apply verified tax-inclusive prices with dates. Unsupported tariffs remain manual; location is never transmitted.
+- Use bundled official Lucide icons with third-party license notices.
+- Extend desktop smoke with energy-first hierarchy, daily/hourly cost, empty tariff and tariff setup persistence assertions.
+- Preserve customized widget ordering while migrating the untouched old default to energy/power/network.
+
 ## 0.1.0-alpha.3 — 2026-10-07
 
 - Redesign compact mode with a 68 px window, stacked download/upload/ping and power readings, restrained typography, concave top shoulders and softer lower corners.

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IslandAPI, Settings, Snapshot, UpdateStatus, View } from '../shared/types';
 const api: IslandAPI = {
+  findTariff: (request) => ipcRenderer.invoke('tariff:find', request),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings: Settings) => ipcRenderer.invoke('settings:save', settings),
   getSnapshot: () => ipcRenderer.invoke('telemetry:get'),

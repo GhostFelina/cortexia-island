@@ -205,3 +205,36 @@ test('release manifests merge both mac architectures and reject mismatched versi
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+import { parseResidentialTariff, validateTariffRequest } from '../main/tariff';
+
+test('online tariff parses official residential columns and taxes; unsupported and malformed data fail closed', () => {
+  const request = {
+    city: 'Ankara',
+    district: 'Çankaya',
+    subscription: 'residential' as const,
+    tier: 'low' as const,
+  };
+  const rows = [
+    ['4 Nisan 2026 Tarihinden İtibaren Geçerli Vergiler Hariç Elektrik Tarifeleri'],
+    ['Abone', 'Tek Zamanlı Enerji Bedeli (kr/kWh)', 'Dağıtım Bedeli (kr/kWh)'],
+    ['Mesken (8 kWh/gün ve altı)', 49.4065, 242.49],
+    ['Mesken (8 kWh/gün üstü)', 189.5808, 242.49],
+  ];
+  const now = Date.UTC(2026, 9, 7);
+  const low = parseResidentialTariff(rows, request, now, 'https://www.epdk.gov.tr/example');
+  assert.equal(low.price, 3.238035);
+  assert.equal(low.effectiveDate, '2026-04-04');
+  assert.equal(
+    parseResidentialTariff(rows, { ...request, tier: 'high' }, now, low.documentUrl).price,
+    4.857048,
+  );
+  assert.throws(() => validateTariffRequest({ ...request, city: 'Unknown' }));
+  assert.throws(() => validateTariffRequest({ ...request, district: '' }));
+  assert.throws(() => validateTariffRequest({ ...request, subscription: 'other' }));
+  assert.throws(() => parseResidentialTariff(rows.slice(0, 2), request, now, low.documentUrl));
+  assert.throws(() => parseResidentialTariff([...rows, rows[2]], request, now, low.documentUrl));
+  assert.throws(() => parseResidentialTariff(rows, request, Date.UTC(2027, 0, 1), low.documentUrl));
+  const future = structuredClone(rows);
+  future[0][0] = '1 Aralık 2026 Tarihinden İtibaren Geçerli Vergiler Hariç Elektrik Tarifeleri';
+  assert.throws(() => parseResidentialTariff(future, request, now, low.documentUrl));
+});

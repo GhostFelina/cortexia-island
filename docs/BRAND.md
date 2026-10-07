@@ -11,6 +11,7 @@ An original C-shaped sculptural mark surrounds a floating island. OLED black cer
 - `assets/mark.png`: 96 px source used at a small size in the island.
 - `assets/brand/icon-preview.png`: 256 px preview.
 - `assets/brand/hero.png`: wide campaign/README artwork.
+- The campaign was regenerated in the same ChatGPT browser conversation for the electricity-first direction, with the tagline **Power. Cost. Clarity.**
 
 Run `npx electron scripts/derive-brand.cjs` to recreate packaging sizes from the master. This preserves transparency; it is resizing/format conversion, not re-generation. Source and derived art remain in the repository.
 

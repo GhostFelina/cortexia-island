@@ -16,6 +16,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { DataStore } from './store';
 import { Telemetry } from './telemetry';
+import { findOnlineTariff, validateTariffRequest } from './tariff';
 import {
   DEFAULT_SETTINGS,
   validateSettings,
@@ -44,7 +45,7 @@ if (!lock) {
   let moveTimer: NodeJS.Timeout | undefined;
   let resizing: { corner: string; bounds: Electron.Rectangle; cursor: Electron.Point } | undefined;
   const root = path.join(__dirname, '..', '..');
-  const heights: Record<View, number> = { compact: 68, expanded: 520, settings: 760 };
+  const heights: Record<View, number> = { compact: 68, expanded: 600, settings: 760 };
   let layout = { docked: true };
   function emitLayout(bounds = win.getBounds()) {
     const area = screen.getDisplayMatching(bounds).workArea;
@@ -60,14 +61,14 @@ if (!lock) {
       saved
         ? {
             ...saved,
-            width: size?.width ?? (view === 'compact' ? 400 : 560),
+            width: size?.width ?? (view === 'compact' ? 440 : 560),
             height: size?.height ?? heights[view],
           }
         : null,
       store.data.settings.displayId ?? screen.getPrimaryDisplay().id,
     );
     const area = display.workArea;
-    const width = Math.min(size?.width ?? (view === 'compact' ? 400 : 560), area.width);
+    const width = Math.min(size?.width ?? (view === 'compact' ? 440 : 560), area.width);
     const height = Math.min(size?.height ?? heights[view], area.height);
     const x = saved
       ? Math.max(area.x, Math.min(saved.x, area.x + area.width - width))
@@ -160,6 +161,14 @@ if (!lock) {
   }
   async function createWindow() {
     store = new DataStore(app.getPath('userData'));
+    if (
+      !smoke &&
+      store.data.settings.tariff === null &&
+      !store.data.settings.electricity.onboardingComplete
+    )
+      view = 'settings';
+    if (store.data.settings.widgets.join(',') === 'network,power,energy')
+      store.data.settings.widgets = ['energy', 'power', 'network'];
     if (process.argv.includes('--dock')) {
       store.data.settings.position = null;
       store.data.settings.topOffset = 0;
@@ -197,8 +206,49 @@ if (!lock) {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event) => event.preventDefault());
     register('settings:get', () => store.data.settings);
+    let tariffBusy = false;
+    register('tariff:find', async (input: unknown) => {
+      if (tariffBusy) throw new Error('Tarife sorgusu zaten sürüyor.');
+      if (store.data.settings.currency !== 'TRY' && store.data.days.some((d) => d.pricedWh > 0))
+        throw new Error('Fiyatlandırılmış geçmişin para birimi TRY değil. Manuel fiyat kullan.');
+      const request = validateTariffRequest(input);
+      tariffBusy = true;
+      try {
+        const quote = await findOnlineTariff(request);
+        const settings = validateSettings({
+          ...store.data.settings,
+          currency: 'TRY',
+          tariff: quote.price,
+          electricity: {
+            ...request,
+            onboardingComplete: true,
+            source: 'epdk',
+            effectiveDate: quote.effectiveDate,
+            checkedAt: quote.checkedAt,
+          },
+        });
+        store.backup();
+        store.data.settings = settings;
+        store.save();
+        telemetry.resetInterval();
+        emitSettings();
+        return { settings, quote };
+      } finally {
+        tariffBusy = false;
+      }
+    });
     register('settings:save', (input: unknown) => {
       const settings = validateSettings(input);
+      if (
+        settings.tariff !== store.data.settings.tariff ||
+        settings.currency !== store.data.settings.currency
+      )
+        settings.electricity = {
+          ...settings.electricity,
+          source: 'manual',
+          effectiveDate: null,
+          checkedAt: null,
+        };
       settings.position = store.data.settings.position;
       settings.sizes = store.data.settings.sizes;
       if (settings.displayId !== store.data.settings.displayId) settings.position = null;
@@ -491,6 +541,69 @@ if (!lock) {
             (await win.webContents.capturePage()).toPNG(),
           );
           const originalBounds = win.getBounds();
+          const energyUi = await win.webContents.executeJavaScript(
+            `({first:document.querySelector('[data-widget-card]')?.dataset.widgetCard, cost:document.querySelector('[data-value="hero-cost"]')?.textContent, hourly:document.querySelector('[data-value="hourly-cost"]')?.textContent})`,
+          );
+          if (
+            energyUi.first !== 'energy' ||
+            energyUi.cost !== '₺2,86' ||
+            energyUi.hourly !== '₺0,42'
+          )
+            throw new Error(
+              'Energy hierarchy / cost presentation failed: ' + JSON.stringify(energyUi),
+            );
+          await win.webContents.executeJavaScript(
+            `window.island.getSettings().then(s=>window.island.saveSettings({...s,tariff:null}))`,
+          );
+          const unpricedFixture = fixture();
+          unpricedFixture.today = emptyDay(localDate(Date.now()));
+          win.webContents.send('telemetry:snapshot', unpricedFixture);
+          await new Promise((resolve) => setTimeout(resolve, 180));
+          fs.writeFileSync(
+            path.join(artifact, 'tariff-setup.png'),
+            (await win.webContents.capturePage()).toPNG(),
+          );
+          await win.webContents.executeJavaScript(
+            `document.querySelector('[data-action="tariff"]').click()`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 180));
+          const tariffFocus = await win.webContents.executeJavaScript(
+            `document.activeElement?.getAttribute('name')`,
+          );
+          if (tariffFocus !== 'tariffCity') throw new Error('Tariff setup focus failed');
+          await win.webContents.executeJavaScript(
+            `document.querySelector('select[name="tariffCity"]').value='Ankara';document.querySelector('input[name="tariffDistrict"]').value='Çankaya'`,
+          );
+          fs.writeFileSync(
+            path.join(artifact, 'onboarding.png'),
+            (await win.webContents.capturePage()).toPNG(),
+          );
+          if (process.argv.includes('--verify-tariff')) {
+            const result = await win.webContents.executeJavaScript(
+              `window.island.findTariff({city:'Ankara',district:'Çankaya',subscription:'residential',tier:'low'})`,
+            );
+            if (
+              !(result.quote.price > 0) ||
+              result.settings.electricity.source !== 'epdk' ||
+              store.data.settings.tariff !== result.quote.price
+            )
+              throw new Error('Online tariff application failed');
+            fs.writeFileSync(
+              path.join(artifact, 'tariff-check.json'),
+              JSON.stringify(result.quote, null, 2),
+            );
+          }
+          await win.webContents.executeJavaScript(
+            `document.querySelector('input[name="tariff"]').value='3.4';document.querySelector('#settings-form').requestSubmit()`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 180));
+          if (store.data.settings.tariff !== 3.4)
+            throw new Error('Tariff setup persistence failed');
+          await win.webContents.executeJavaScript(
+            `document.querySelector('[data-action="expand"]').click()`,
+          );
+          win.webContents.send('telemetry:snapshot', fixture());
+          await new Promise((resolve) => setTimeout(resolve, 180));
           const handles = await win.webContents.executeJavaScript(
             `document.querySelectorAll('.resize-handle').length`,
           );
@@ -624,6 +737,10 @@ if (!lock) {
                   'opacity',
                   'corner-resize-persistence',
                   'cross-display-persistence',
+                  'energy-first-hierarchy',
+                  'daily-hourly-cost',
+                  'tariff-setup-focus',
+                  'tariff-setup-persistence',
                 ],
                 ...state,
               },

@@ -27,8 +27,18 @@ export function locateDisplay<T extends { id: number; workArea: Area }>(
 }
 export const DEFAULT_SETTINGS: Settings = {
   language: 'tr',
-  widgets: ['network', 'power', 'energy'],
+  widgets: ['energy', 'power', 'network'],
   tariff: null,
+  electricity: {
+    city: '',
+    district: '',
+    subscription: 'residential',
+    tier: 'low',
+    onboardingComplete: false,
+    source: 'manual',
+    effectiveDate: null,
+    checkedAt: null,
+  },
   currency: 'TRY',
   idleWatts: 65,
   maxWatts: 350,
@@ -96,6 +106,24 @@ export function validateSettings(input: unknown): Settings {
   )
     throw new Error('Invalid widgets');
   if (s.tariff !== null) numberInRange(s.tariff, 0, 10000, 'tariff');
+  s.electricity ??= structuredClone(DEFAULT_SETTINGS.electricity);
+  const electricity = s.electricity;
+  if (
+    !electricity ||
+    typeof electricity !== 'object' ||
+    typeof electricity.city !== 'string' ||
+    electricity.city.length > 60 ||
+    typeof electricity.district !== 'string' ||
+    electricity.district.length > 60 ||
+    !['residential', 'other'].includes(electricity.subscription) ||
+    !['low', 'high'].includes(electricity.tier) ||
+    typeof electricity.onboardingComplete !== 'boolean' ||
+    !['manual', 'epdk'].includes(electricity.source) ||
+    (electricity.effectiveDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(electricity.effectiveDate))
+  )
+    throw new Error('Invalid electricity profile');
+  if (electricity.checkedAt !== null)
+    numberInRange(electricity.checkedAt, 0, 10000000000000, 'electricity.checkedAt');
   numberInRange(s.idleWatts, 0, 10000, 'idleWatts');
   numberInRange(s.maxWatts, s.idleWatts, 20000, 'maxWatts');
   numberInRange(s.topOffset, 0, 300, 'topOffset');
@@ -129,6 +157,7 @@ export function validateSettings(input: unknown): Settings {
     language: s.language,
     widgets: [...s.widgets],
     tariff: s.tariff,
+    electricity: structuredClone(electricity),
     currency: s.currency,
     idleWatts: s.idleWatts,
     maxWatts: s.maxWatts,
