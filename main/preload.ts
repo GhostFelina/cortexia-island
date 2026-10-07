@@ -5,6 +5,12 @@ const api: IslandAPI = {
   saveSettings: (settings: Settings) => ipcRenderer.invoke('settings:save', settings),
   getSnapshot: () => ipcRenderer.invoke('telemetry:get'),
   getInfo: () => ipcRenderer.invoke('app:info'),
+  getLayout: () => ipcRenderer.invoke('window:layout'),
+  onLayout: (callback) => {
+    const listener = (_: unknown, layout: { docked: boolean }) => callback(layout);
+    ipcRenderer.on('window:layout', listener);
+    return () => ipcRenderer.removeListener('window:layout', listener);
+  },
   setView: (view: View) => ipcRenderer.invoke('window:view', view),
   hide: () => ipcRenderer.invoke('window:hide'),
   quit: () => ipcRenderer.invoke('app:quit'),

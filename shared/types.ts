@@ -18,6 +18,7 @@ export interface Settings {
   displayId: number | null;
   opacity: number;
   clickThrough: boolean;
+  snapToEdge: boolean;
   position: { x: number; y: number } | null;
   sizes: Partial<Record<View, { width: number; height: number }>>;
 }
@@ -68,6 +69,7 @@ export interface UpdateStatus {
   message?: string;
 }
 export interface AppInfo {
+  initialView: View;
   version: string;
   platform: string;
   packaged: boolean;
@@ -80,6 +82,8 @@ export interface IslandAPI {
   saveSettings(settings: Settings): Promise<Settings>;
   getSnapshot(): Promise<Snapshot | null>;
   getInfo(): Promise<AppInfo>;
+  getLayout(): Promise<{ docked: boolean }>;
+  onLayout(callback: (layout: { docked: boolean }) => void): () => void;
   setView(view: View): Promise<void>;
   hide(): Promise<void>;
   quit(): Promise<void>;

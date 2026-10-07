@@ -25,6 +25,7 @@ let settings: Settings;
 let snapshot: Snapshot | null = null;
 let info: AppInfo;
 let view: View = 'expanded';
+let docked = true;
 let showHistory = false;
 let update: UpdateStatus = { phase: 'idle' };
 const icons: Record<string, string> = {
@@ -126,20 +127,22 @@ function historyHtml() {
   return `<section class="history-card"><div class="card-heading"><span>${icon('chart')}${t('SON 7 KAYITLI GÜN', 'LAST 7 RECORDED DAYS')}</span></div><div data-history></div><p class="microcopy">${t('Takip edilmeyen saatler hesaba eklenmez. Yeşil: ölçülen · gri: tahmin.', 'Untracked hours are excluded. Green: measured · gray: estimated.')}</p></section>`;
 }
 function compactWidget(id: WidgetId) {
+  const value = (key: string, unit: string, symbol: string, color = '') =>
+    `<span class="compact-value ${color}">${icon(symbol)}<strong data-value="${key}">—</strong><small>${unit}</small></span>`;
   if (id === 'network')
-    return `<span class="cyan">${icon('down')}<strong data-value="down">—</strong><small>Mb/s</small></span>`;
+    return `<span class="compact-stat">${value('down', 'Mbps', 'down', 'cyan')}<span class="compact-context">${icon('up')}<b data-value="up">—</b><span>Mbps</span><i class="compact-dot" data-status></i><b data-value="ping">—</b><span>ms</span></span></span>`;
   if (id === 'power')
-    return `<span class="warm">${icon('bolt')}<strong data-value="watts">—</strong><small>W</small><small class="estimate-mark" data-value="compact-source">≈</small></span>`;
+    return `<span class="compact-stat">${value('watts', 'W', 'bolt', 'warm')}<span class="compact-context"><span data-value="source">${t('TAHMİN', 'ESTIMATE')}</span><span>· ${t('güç', 'power')}</span></span></span>`;
   if (id === 'energy')
-    return `<span>${icon('chart')}<strong data-value="energy">—</strong><small>kWh</small></span>`;
+    return `<span class="compact-stat">${value('energy', 'kWh', 'chart')}<span class="compact-context">${t('BUGÜN', 'TODAY')}</span></span>`;
   if (id === 'system')
-    return `<span>${icon('cpu')}<strong data-value="compact-cpu">—</strong><small>%</small></span>`;
+    return `<span class="compact-stat">${value('compact-cpu', '%', 'cpu')}<span class="compact-context">CPU</span></span>`;
   if (id === 'battery')
-    return `<span>${icon('battery')}<strong data-value="compact-battery">—</strong><small>%</small></span>`;
-  return `<span>${icon('clock')}<strong data-value="clock">—</strong></span>`;
+    return `<span class="compact-stat">${value('compact-battery', '%', 'battery')}<span class="compact-context">${t('BATARYA', 'BATTERY')}</span></span>`;
+  return `<span class="compact-stat">${value('clock', '', 'clock')}<span class="compact-context">${t('YEREL SAAT', 'LOCAL TIME')}</span></span>`;
 }
 function render() {
-  root.className = `view-${view}${settings.reducedMotion ? ' reduced-motion' : ''}${settings.topOffset === 0 && (!settings.position || settings.position.y === 0) ? ' edge-attached' : ''}`;
+  root.className = `view-${view}${settings.reducedMotion ? ' reduced-motion' : ''}${docked ? ' edge-attached' : ''}`;
   if (view === 'compact') {
     root.innerHTML = `<main class="island compact"><div class="compact-brand drag-area"><span class="lens"></span></div><button class="compact-readout" data-action="expand" aria-label="${t('Adayı genişlet', 'Expand island')}">${settings.widgets.slice(0, 2).map(compactWidget).join('<span class="compact-separator"></span>')}</button>${button('expand', t('Genişlet', 'Expand'), 'chevron')}</main>`;
   } else if (view === 'expanded') {
@@ -166,6 +169,11 @@ function render() {
     .querySelectorAll<HTMLElement>('[data-action]')
     .forEach((el) => el.addEventListener('click', () => void action(el.dataset.action!)));
   if (view === 'settings') bindSettings();
+  for (const side of ['left', 'right']) {
+    const shoulder = document.createElement('span');
+    shoulder.className = `notch-shoulder ${side}`;
+    root.appendChild(shoulder);
+  }
   const island = root.querySelector('.island');
   for (const corner of ['nw', 'ne', 'sw', 'se']) {
     const handle = document.createElement('div');
@@ -369,6 +377,12 @@ function insertPersonalization() {
   root
     .querySelector('.check-options')
     ?.insertAdjacentHTML(
+      'beforeend',
+      `<label><input type="checkbox" name="snapToEdge" ${settings.snapToEdge ? 'checked' : ''}>${t('Üst kenara yaklaşınca birleştir · tüm monitörlerde', 'Snap to the top edge · on any display')}</label>`,
+    );
+  root
+    .querySelector('.check-options')
+    ?.insertAdjacentHTML(
       'beforebegin',
       `<div class="personalization"><label class="opacity-label">${t('Saydamlık', 'Opacity')}<span><input type="range" name="opacity" min="0.2" max="1" step="0.05" value="${settings.opacity}"><output>${Math.round(settings.opacity * 100)}%</output></span></label><label class="clickthrough-option"><input type="checkbox" name="clickThrough" ${settings.clickThrough ? 'checked' : ''}>${t('Tıklamaları alttaki pencereye geçir', 'Pass clicks to the window below')}</label><p class="microcopy">${t('Başlıktan sürükleyerek yer değiştir; konumun hatırlanır. Tamamen gizlemek için göz düğmesini kullan. Tıklama geçişinden çıkmak için tepsiye tıkla veya Ctrl/⌘+Shift+I kullan.', 'Drag the header to move; your position is remembered. Use the eye button to hide completely. Click the tray or press Ctrl/⌘+Shift+I to exit click-through mode.')}</p><button class="secondary-button" type="button" data-action="center">${t('Üst ortaya geri getir', 'Reset to top center')}</button></div>`,
     );
@@ -467,6 +481,7 @@ function bindSettings() {
       launchAtLogin: data.has('launchAtLogin'),
       reducedMotion: data.has('reducedMotion'),
       opacity: num('opacity'),
+      snapToEdge: data.has('snapToEdge'),
       clickThrough: data.has('clickThrough'),
     };
     if (!next.widgets.length) {
@@ -504,12 +519,20 @@ async function init() {
     root.innerHTML = `<main class="preview-note"><span class="lens"></span><h1>Cortexia Island</h1><p>Canlı sistem verileri masaüstü uygulamasında görüntülenir.</p><p>Live system readings are available in the desktop application.</p><code>npm run dev</code></main>`;
     return;
   }
-  [settings, info, snapshot] = await Promise.all([
+  let initialLayout;
+  [settings, info, snapshot, initialLayout] = await Promise.all([
     api.getSettings(),
     api.getInfo(),
     api.getSnapshot(),
+    api.getLayout(),
   ]);
+  docked = initialLayout.docked;
+  view = info.initialView;
   render();
+  api.onLayout((next) => {
+    docked = next.docked;
+    root.classList.toggle('edge-attached', docked);
+  });
   api.onSnapshot((sample) => {
     snapshot = sample;
     if (sample.network.downBps !== null) {

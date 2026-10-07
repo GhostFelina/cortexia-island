@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-alpha.3 — 2026-10-07
+
+- Redesign compact mode with a 68 px window, stacked download/upload/ping and power readings, restrained typography, concave top shoulders and softer lower corners.
+- Start in compact mode; detect actual edge attachment on every monitor and use a floating capsule away from the edge.
+- Free cross-monitor dragging, geometry-based display selection, optional top-edge snapping, saved coordinates and nearest-display recovery after disconnects.
+- Exercise both connected Windows displays in desktop smoke; test negative and vertical monitor coordinates.
+- Avoid stealing keyboard focus during automated smoke and make `--quit` exit cleanly when the app is already closed.
+
 ## 0.1.0-alpha.2 — 2026-10-07
 
 - Fix release merging: exclude builder diagnostic YAML from update metadata, validate manifest files and cover diagnostics/version mismatch with regression assertions.

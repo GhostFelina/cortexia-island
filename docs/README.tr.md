@@ -5,12 +5,13 @@ OLED siyah masaüstü adası. Ağ sağlığını, anlık trafiği ve PC enerji m
 ## Başlangıç
 
 1. [Sürümlerden](https://github.com/GhostFelina/cortexia-island/releases) Windows x64 `.exe` paketini indir. Mac için arm64 (Apple Silicon) veya x64 (Intel) `.dmg` seç.
-2. Ada ekranın üst ortasında açılır. Küçült düğmesiyle kapsüle dön; kapsüle tıklayarak genişlet.
+2. Ada ekranın üst ortasında ince kompakt çentik olarak açılır. Verilere tıklayarak genişlet; küçült düğmesiyle geri dön.
 3. Dişli düğmesinden faturandaki kWh fiyatını gir. Boşta/yoğun yük watt profilini cihazına göre ayarla.
 4. Widget listesinden ağ, güç, enerji, sistem, batarya ve saati seç. Ok düğmesiyle sıralamayı değiştir.
 5. **Ctrl/⌘ + Shift + I** gösterir/gizler. Sistem tepsisinden açabilir veya kapatabilirsin.
 6. Başlıktaki marka alanını mouse ile tutup sürükle. Dört köşeden boyutlandır; her görünümün boyutu ayrı hatırlanır. “Üst ortaya geri getir” adayı ekranın üst kenarına birleştirir.
 7. Saydamlık ve tıklama geçişini ayarlardan seç. Tam gizlemeden veya tıklama geçişinden tepsi/kısayolla geri dön. Açıkken Windows görev çubuğunda veya Mac Dock’ta uygulama ikonu görünür.
+8. Marka/tutma alanından diğer monitöre sürükle; ekran tercihi seni bir monitöre kilitlemez. Her ekranda üst kenara yaklaşınca birleştirir; bu davranışı ayarlardaki kutudan kapatabilirsin. Kenardan ayrılınca yumuşak kapsüle dönüşür.
 
 ## Verileri doğru yorumlama
 

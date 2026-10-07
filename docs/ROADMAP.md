@@ -27,6 +27,8 @@
 
 ## Next design pass — requested 2026-10-07
 
+- [x] Alpha.3: thinner compact composition, stacked readings, notch shoulders, free cross-display dragging and optional edge attachment. Verified on both connected Windows monitors.
+
 - [ ] Refine the island and its data presentation: typography, number alignment, spacing, compact composition, mini charts and restrained material/lighting detail. Preserve readability and true black surfaces. The owner asked to queue this after the first working release.
 
 ## Next widgets — user guided

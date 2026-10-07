@@ -1,5 +1,30 @@
 import type { Settings, WidgetId, DayEnergy, StoreData } from '../shared/types';
 export const WIDGETS: WidgetId[] = ['network', 'power', 'energy', 'system', 'battery', 'clock'];
+type Area = { x: number; y: number; width: number; height: number };
+export function locateDisplay<T extends { id: number; workArea: Area }>(
+  displays: T[],
+  bounds: Area | null,
+  preferred: number | null,
+): T {
+  if (!displays.length) throw new Error('No displays');
+  if (!bounds) return displays.find((d) => d.id === preferred) ?? displays[0];
+  const score = (display: T) => {
+    const a = display.workArea;
+    const overlap =
+      Math.max(0, Math.min(bounds.x + bounds.width, a.x + a.width) - Math.max(bounds.x, a.x)) *
+      Math.max(0, Math.min(bounds.y + bounds.height, a.y + a.height) - Math.max(bounds.y, a.y));
+    if (overlap) return overlap;
+    const cx = bounds.x + bounds.width / 2;
+    const cy = bounds.y + bounds.height / 2;
+    const dx = Math.max(a.x - cx, 0, cx - a.x - a.width);
+    const dy = Math.max(a.y - cy, 0, cy - a.y - a.height);
+    return -dx * dx - dy * dy;
+  };
+  return displays.reduce(
+    (best, display) => (score(display) > score(best) ? display : best),
+    displays.find((d) => d.id === preferred) ?? displays[0],
+  );
+}
 export const DEFAULT_SETTINGS: Settings = {
   language: 'tr',
   widgets: ['network', 'power', 'energy'],
@@ -18,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   displayId: null,
   opacity: 1,
   clickThrough: false,
+  snapToEdge: true,
   position: null,
   sizes: {},
 };
@@ -47,12 +73,13 @@ export function validateSettings(input: unknown): Settings {
   s.clickThrough ??= false;
   s.position ??= null;
   s.sizes ??= {};
+  s.snapToEdge ??= true;
   if (typeof s.sizes !== 'object' || Array.isArray(s.sizes)) throw new Error('Invalid sizes');
   for (const [view, size] of Object.entries(s.sizes)) {
     if (!['compact', 'expanded', 'settings'].includes(view) || !size)
       throw new Error('Invalid size');
-    numberInRange(size.width, 400, 1200, 'size.width');
-    numberInRange(size.height, view === 'compact' ? 90 : 260, 1200, 'size.height');
+    numberInRange(size.width, view === 'compact' ? 320 : 400, 1200, 'size.width');
+    numberInRange(size.height, view === 'compact' ? 56 : 260, 1200, 'size.height');
   }
   if (
     !['tr', 'en'].includes(s.language) ||
@@ -93,6 +120,7 @@ export function validateSettings(input: unknown): Settings {
     throw new Error('Invalid display');
   numberInRange(s.opacity, 0.2, 1, 'opacity');
   if (typeof s.clickThrough !== 'boolean') throw new Error('Invalid clickThrough');
+  if (typeof s.snapToEdge !== 'boolean') throw new Error('Invalid snapToEdge');
   if (s.position !== null) {
     numberInRange(s.position.x, -100000, 100000, 'position.x');
     numberInRange(s.position.y, -100000, 100000, 'position.y');
@@ -115,6 +143,7 @@ export function validateSettings(input: unknown): Settings {
     displayId: s.displayId,
     opacity: s.opacity,
     clickThrough: s.clickThrough,
+    snapToEdge: s.snapToEdge,
     position: s.position ? { x: s.position.x, y: s.position.y } : null,
     sizes: structuredClone(s.sizes),
   };

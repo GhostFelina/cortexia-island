@@ -16,7 +16,14 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { DataStore } from './store';
 import { Telemetry } from './telemetry';
-import { DEFAULT_SETTINGS, validateSettings, validateStore, emptyDay, localDate } from './core';
+import {
+  DEFAULT_SETTINGS,
+  validateSettings,
+  validateStore,
+  emptyDay,
+  localDate,
+  locateDisplay,
+} from './core';
 import type { Snapshot, View, UpdateStatus } from '../shared/types';
 const smoke = process.argv.includes('--smoke');
 const captureLive = process.argv.includes('--capture-live');
@@ -24,27 +31,44 @@ if (smoke) app.setPath('userData', path.join(process.cwd(), '.artifacts', 'smoke
 const lock = app.requestSingleInstanceLock();
 if (!lock) {
   app.quit();
+} else if (process.argv.includes('--quit')) {
+  app.quit();
 } else {
   let win: BrowserWindow;
   let tray: Tray;
   let store: DataStore;
   let telemetry: Telemetry;
-  let view: View = 'expanded';
+  let view: View = smoke ? 'expanded' : 'compact';
   let update: UpdateStatus = { phase: 'idle' };
   let expectedPosition = { x: 0, y: 0 };
   let moveTimer: NodeJS.Timeout | undefined;
   let resizing: { corner: string; bounds: Electron.Rectangle; cursor: Electron.Point } | undefined;
   const root = path.join(__dirname, '..', '..');
-  const heights: Record<View, number> = { compact: 98, expanded: 520, settings: 760 };
+  const heights: Record<View, number> = { compact: 68, expanded: 520, settings: 760 };
+  let layout = { docked: true };
+  function emitLayout(bounds = win.getBounds()) {
+    const area = screen.getDisplayMatching(bounds).workArea;
+    layout = { docked: Math.abs(bounds.y - area.y) <= 1 };
+    win.webContents.send('window:layout', layout);
+  }
   function position() {
     const displays = screen.getAllDisplays();
-    const display =
-      displays.find((d) => d.id === store.data.settings.displayId) ?? screen.getPrimaryDisplay();
-    const area = display.workArea;
-    const size = store.data.settings.sizes[view];
-    const width = Math.min(size?.width ?? (view === 'compact' ? 420 : 560), area.width);
-    const height = Math.min(size?.height ?? heights[view], area.height);
     const saved = store.data.settings.position;
+    const size = store.data.settings.sizes[view];
+    const display = locateDisplay(
+      displays,
+      saved
+        ? {
+            ...saved,
+            width: size?.width ?? (view === 'compact' ? 400 : 560),
+            height: size?.height ?? heights[view],
+          }
+        : null,
+      store.data.settings.displayId ?? screen.getPrimaryDisplay().id,
+    );
+    const area = display.workArea;
+    const width = Math.min(size?.width ?? (view === 'compact' ? 400 : 560), area.width);
+    const height = Math.min(size?.height ?? heights[view], area.height);
     const x = saved
       ? Math.max(area.x, Math.min(saved.x, area.x + area.width - width))
       : Math.round(area.x + (area.width - width) / 2);
@@ -53,6 +77,7 @@ if (!lock) {
       : area.y + Math.min(store.data.settings.topOffset, Math.max(0, area.height - height));
     expectedPosition = { x, y };
     win.setBounds({ x, y, width, height });
+    emitLayout({ x, y, width, height });
   }
   function emitUpdate(status: UpdateStatus) {
     update = status;
@@ -85,8 +110,11 @@ if (!lock) {
     store.save();
     applySettings();
     emitSettings();
-    win.show();
-    win.focus();
+    if (smoke) win.showInactive();
+    else {
+      win.show();
+      win.focus();
+    }
   }
   function fixture(): Snapshot {
     const today = {
@@ -139,7 +167,7 @@ if (!lock) {
     if (smoke)
       store.data = {
         schemaVersion: 1,
-        settings: { ...DEFAULT_SETTINGS, tariff: 3.4, widgets: [...DEFAULT_SETTINGS.widgets] },
+        settings: { ...structuredClone(DEFAULT_SETTINGS), tariff: 3.4 },
         days: [],
       };
     store.backup();
@@ -190,7 +218,9 @@ if (!lock) {
       return settings;
     });
     register('telemetry:get', () => (smoke ? fixture() : telemetry.last));
+    register('window:layout', () => layout);
     register('app:info', () => ({
+      initialView: view,
       version: app.getVersion(),
       platform: process.platform,
       packaged: app.isPackaged,
@@ -215,6 +245,7 @@ if (!lock) {
       )
         throw new Error('Invalid resize');
       if (phase === 'start') {
+        if (moveTimer) clearTimeout(moveTimer);
         resizing = { corner, bounds: win.getBounds(), cursor: screen.getCursorScreenPoint() };
         return;
       }
@@ -226,11 +257,14 @@ if (!lock) {
         const dy = cursor.y - resizing.cursor.y;
         const area = screen.getDisplayMatching(b).workArea;
         const width = Math.round(
-          Math.max(400, Math.min(1200, area.width, b.width + (corner.includes('w') ? -dx : dx))),
+          Math.max(
+            view === 'compact' ? 320 : 400,
+            Math.min(1200, area.width, b.width + (corner.includes('w') ? -dx : dx)),
+          ),
         );
         const height = Math.round(
           Math.max(
-            view === 'compact' ? 90 : 260,
+            view === 'compact' ? 56 : 260,
             Math.min(1200, area.height, b.height + (corner.includes('n') ? -dy : dy)),
           ),
         );
@@ -246,6 +280,7 @@ if (!lock) {
           ),
         );
         win.setBounds({ x, y, width, height });
+        emitLayout({ x, y, width, height });
       } else {
         const bounds = win.getBounds();
         store.data.settings.sizes[view] = { width: bounds.width, height: bounds.height };
@@ -253,6 +288,7 @@ if (!lock) {
         store.save();
         resizing = undefined;
         emitSettings();
+        emitLayout(bounds);
       }
     });
     register('app:quit', () => app.quit());
@@ -384,8 +420,16 @@ if (!lock) {
         if (bounds.x === expectedPosition.x && bounds.y === expectedPosition.y) return;
         store.data.settings.position = { x: bounds.x, y: bounds.y };
         store.data.settings.displayId = screen.getDisplayMatching(bounds).id;
+        const area = screen.getDisplayMatching(bounds).workArea;
+        if (store.data.settings.snapToEdge && Math.abs(bounds.y - area.y) <= 12) {
+          bounds.y = area.y;
+          store.data.settings.position.y = area.y;
+          expectedPosition = { x: bounds.x, y: bounds.y };
+          win.setBounds(bounds);
+        }
         store.save();
         emitSettings();
+        emitLayout(bounds);
       }, 350);
     });
     screen.on('display-metrics-changed', () => position());
@@ -424,7 +468,8 @@ if (!lock) {
     if (process.env.ISLAND_DEV_URL && !app.isPackaged)
       await win.loadURL(process.env.ISLAND_DEV_URL);
     else await win.loadFile(path.join(root, 'dist', 'index.html'));
-    win.show();
+    if (smoke) win.showInactive();
+    else win.show();
     if (smoke) {
       win.webContents.send('telemetry:snapshot', fixture());
       setTimeout(async () => {
@@ -465,6 +510,12 @@ if (!lock) {
           win.setPosition(originalBounds.x + 20, originalBounds.y + 20);
           await new Promise((resolve) => setTimeout(resolve, 700));
           if (!store.data.settings.position) throw new Error('Position persistence failed');
+          for (const display of screen.getAllDisplays()) {
+            win.setPosition(display.workArea.x + 40, display.workArea.y + 50);
+            await new Promise((resolve) => setTimeout(resolve, 700));
+            if (store.data.settings.displayId !== display.id)
+              throw new Error('Cross-display persistence failed');
+          }
           await win.webContents.executeJavaScript('window.island.center()');
           await new Promise((resolve) => setTimeout(resolve, 100));
           if (store.data.settings.position !== null) throw new Error('Position reset failed');
@@ -489,7 +540,7 @@ if (!lock) {
             `document.querySelector('[data-action="compact"]').click()`,
           );
           await pause();
-          if (win.getBounds().height !== 98) throw new Error('Compact window failed');
+          if (win.getBounds().height !== 68) throw new Error('Compact window failed');
           fs.writeFileSync(
             path.join(artifact, 'compact.png'),
             (await win.webContents.capturePage()).toPNG(),
@@ -555,6 +606,7 @@ if (!lock) {
               {
                 passed: true,
                 version: app.getVersion(),
+                displayCount: screen.getAllDisplays().length,
                 checks: [
                   'preload',
                   'renderer',
@@ -571,6 +623,7 @@ if (!lock) {
                   'click-through-recovery',
                   'opacity',
                   'corner-resize-persistence',
+                  'cross-display-persistence',
                 ],
                 ...state,
               },

@@ -33,7 +33,7 @@ export class DataStore {
     }
     this.data = loaded ?? {
       schemaVersion: 1,
-      settings: { ...DEFAULT_SETTINGS, widgets: [...DEFAULT_SETTINGS.widgets] },
+      settings: structuredClone(DEFAULT_SETTINGS),
       days: [],
     };
     if (!loaded && fs.existsSync(this.file)) {

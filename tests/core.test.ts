@@ -14,6 +14,7 @@ import {
   validPrivateHost,
   localDate,
   emptyDay,
+  locateDisplay,
 } from '../main/core';
 import { DataStore } from '../main/store';
 import type { DayEnergy } from '../shared/types';
@@ -26,6 +27,22 @@ test('valid settings are copied and unsafe probes are rejected', () => {
   assert.throws(() => validateSettings({ ...s, widgets: [] }));
   assert.throws(() => validateSettings({ ...s, tariff: NaN }));
   assert.throws(() => validateSettings({ ...s, idleWatts: 400, maxWatts: 200 }));
+});
+test('display placement follows dragged geometry across negative and vertical monitor coordinates', () => {
+  const displays = [
+    { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } },
+    { id: 2, workArea: { x: -1600, y: 120, width: 1600, height: 900 } },
+    { id: 3, workArea: { x: 0, y: -1200, width: 1920, height: 1200 } },
+  ];
+  assert.equal(locateDisplay(displays, { x: -1400, y: 150, width: 400, height: 68 }, 1).id, 2);
+  assert.equal(locateDisplay(displays, { x: 200, y: -1100, width: 400, height: 68 }, 1).id, 3);
+  assert.equal(locateDisplay(displays, { x: -100, y: 150, width: 400, height: 68 }, 2).id, 1);
+  assert.equal(
+    locateDisplay(displays.slice(0, 2), { x: 200, y: -1100, width: 400, height: 68 }, 3).id,
+    1,
+  );
+  assert.equal(locateDisplay(displays, null, 2).id, 2);
+  assert.throws(() => locateDisplay([], null, null));
 });
 test('meter accepts only local plain hosts and never injected URLs', () => {
   for (const host of ['192.168.1.10', '10.0.0.5', '172.16.0.4', 'localhost', '127.0.0.1'])
@@ -56,11 +73,13 @@ test('personalization is bounded and earlier schema-v1 settings receive additive
   delete previous.clickThrough;
   delete previous.position;
   delete previous.sizes;
+  delete previous.snapToEdge;
   const restored = validateSettings(previous);
   assert.equal(restored.opacity, 1);
   assert.equal(restored.clickThrough, false);
   assert.equal(restored.position, null);
   assert.deepEqual(restored.sizes, {});
+  assert.equal(restored.snapToEdge, true);
   assert.throws(() =>
     validateSettings({ ...DEFAULT_SETTINGS, sizes: { expanded: { width: 100, height: 500 } } }),
   );

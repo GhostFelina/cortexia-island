@@ -1,6 +1,8 @@
-# Cortexia Island 0.1.0-alpha.2
+# Cortexia Island 0.1.0-alpha.3
 
 First alpha: an original OLED black island with network health, calibrated power estimates, optional Shelly outlet readings, daily energy/cost tracking and six configurable widgets.
+
+Alpha.3 refines the compact view into a thin notch with concave top shoulders and stacked readings. Drag the grip/brand to any monitor; optional top-edge snapping works on each screen and switches back to a floating capsule away from the edge. Geometry tests cover negative/vertical monitor coordinates and removal; local Windows smoke exercises both connected displays. The app opens compact by default.
 
 Includes local automatic backups, validated restore, CSV export, tray/shortcut controls, Turkish/English UI, reduced motion, strict TypeScript, tested energy math, desktop smoke tests and versioned Windows/macOS packages.
 
