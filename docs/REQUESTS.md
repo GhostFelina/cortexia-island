@@ -30,6 +30,8 @@ Follow-up implemented in alpha.3: thinner compact notch, concave shoulder transi
 2. Add the owner's next widget list when supplied. Do not assume a final list or execute arbitrary third-party code from a widget selector.
 3. Install and validate on the real MacBook and Windows notebook when available.
 4. Owner's next request, after completing the current release/install: live Codex and Claude 5-hour and weekly usage-limit bars. Investigate supported authenticated data sources, refresh cadence and missing/expired authorization handling. Do not invent percentages or reuse private credentials outside their intended app.
+5. Add a very restrained minimalist electricity animation specifically between the energy-cost and live-power cards: a thin light trace and tiny glint, slow and aesthetic. Keep text readable and support reduced motion. Queued after the current release/install alongside the live usage bars.
+6. Ask the user in the app how to use Cortexia: Windows bar only, dynamic island, or normal application window. Persist and expose the mode in Settings. Bar-only hides the other surfaces and keeps a clear route to settings; improve coherent visibility/startup/recovery transitions. Implement after the current release/install.
 
 ## External work before stable
 

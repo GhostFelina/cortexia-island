@@ -1,6 +1,6 @@
 {
   "name": "cortexia-island",
-  "version": "0.1.0-alpha.6",
+  "version": "0.1.0-alpha.7",
   "description": "An OLED black desktop island for PC electricity, estimated cost and live network health.",
   "author": "GhostFelina",
   "license": "MIT",
@@ -52,6 +52,7 @@
     },
     "files": [
       "out/main/**/*",
+      "out/shared/**/*",
       "dist/**/*",
       "assets/*.png",
       "THIRD_PARTY_NOTICES.md",

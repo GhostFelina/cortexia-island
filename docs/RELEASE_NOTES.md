@@ -1,4 +1,6 @@
-# Cortexia Island 0.1.0-alpha.6
+# Cortexia Island 0.1.0-alpha.7
+
+Alpha.7 fixes a packaging omission found during installed alpha.6 verification: the online tariff provider's shared city-list runtime module is included. Actual packaged-app smoke now gates publication for every architecture. Alpha.5/6 packages should be upgraded; settings and history are retained. Alpha.6 functionality follows below.
 
 Electricity-first OLED black island with centered compact readings and eight selectable widgets.
 
@@ -10,7 +12,7 @@ Electricity-first OLED black island with centered compact readings and eight sel
 
 Retains free movement across monitors, edge attachment, corner resizing of metric/detail views, hide/opacity/click-through, tray/Dock icons, 14 local backups, validated restore, CSV export, explicit updates and Turkish/English UI.
 
-Verified locally: strict type/build checks, 15 unit tests, two-display Windows native smoke, taskbar selection/hide/open, droplet stretch/release, missing/meter electrical presentation, location-only setup and actual online EPDK application. GitHub runs quality and packaging for Windows x64 and both Mac architectures.
+Verified locally: strict type/build checks, 16 unit tests, two-display Windows native smoke, taskbar selection/hide/open, droplet stretch/release, missing/meter electrical presentation, location-only setup and actual online EPDK application. GitHub runs quality and packaging for Windows x64 and both Mac architectures.
 
 **Measurement:** power defaults to a model, not a wall reading. Only running/tracked time is accumulated. Network traffic is not a speed test. Cost is a PC standard-tariff estimate, not a household bill.
 

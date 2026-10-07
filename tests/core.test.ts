@@ -19,6 +19,11 @@ import {
 } from '../main/core';
 import { DataStore } from '../main/store';
 import type { DayEnergy } from '../shared/types';
+test('packaging includes shared runtime modules used by the tariff provider', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
+  assert.ok(manifest.build.files.includes('out/shared/**/*'));
+  assert.ok(fs.existsSync(path.resolve('out/shared/locations.js')));
+});
 test('electrical fields stay missing without meter values and reject nonfinite readings', () => {
   assert.deepEqual(parseElectricalStatus(null), {
     voltage: null,

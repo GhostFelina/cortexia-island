@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-alpha.7 — 2026-10-07
+
+- Fix packaged startup: include shared runtime city-list modules imported by the online tariff provider. Installed alpha.6 verification caught this omission; alpha.5/6 packages should be upgraded.
+- Run actual packaged executables in all release jobs before publishing; fail on startup error, timeout, missing result or wrong version.
+- Add a regression assertion for shared runtime inclusion; preserve settings and history.
+
 ## 0.1.0-alpha.6 — 2026-10-07
 
 - Ask only city/district for automatic standard residential EPDK pricing; remove required manual unit price/subscription/tier controls and label the estimate scope.
