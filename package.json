@@ -25,7 +25,7 @@
     "version": "node scripts/sync-version.cjs"
   },
   "dependencies": {
-    "electron-updater": "6.8.9",
+    "electron-updater": "6.8.11",
     "read-excel-file": "9.3.10",
     "systeminformation": "5.33.15"
   },
